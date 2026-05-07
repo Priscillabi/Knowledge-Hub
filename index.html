@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Knowledge Hub</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Smartsheet Workspace</p>
+          <h1>Knowledge Hub</h1>
+        </div>
+        <button id="refresh-button" type="button">Aggiorna</button>
+      </header>
+
+      <section class="status-panel" aria-live="polite">
+        <p id="status">Caricamento workspace...</p>
+      </section>
+
+      <section class="layout">
+        <aside class="sheet-list" aria-label="Fogli disponibili">
+          <div class="section-heading">
+            <h2>Fogli</h2>
+            <span id="sheet-count">0</span>
+          </div>
+          <div id="sheets"></div>
+        </aside>
+
+        <section class="data-view" aria-label="Dati Smartsheet">
+          <div class="section-heading">
+            <div>
+              <h2 id="sheet-title">Seleziona un foglio</h2>
+              <p id="sheet-subtitle">I dati verranno letti dal workspace configurato su Vercel.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead id="table-head"></thead>
+              <tbody id="table-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
