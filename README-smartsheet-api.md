@@ -39,6 +39,18 @@ ID numerico del solo workspace Smartsheet autorizzato.
 Opzionale:
 
 ```text
+SMARTSHEET_SHEET_NAME
+```
+
+Nome del foglio da leggere dentro il workspace. Se non configurata, l'API cerca:
+
+```text
+Knowledge Hub
+```
+
+Opzionale:
+
+```text
 SMARTSHEET_BASE_URL
 ```
 
@@ -56,16 +68,8 @@ https://api.smartsheet.eu/2.0
 
 ## Come usare l'API
 
-Lista degli sheet dentro il workspace consentito:
+Lettura del foglio `Knowledge Hub` dentro il workspace configurato:
 
 ```text
 https://TUO-SITO.vercel.app/api/smartsheet
 ```
-
-Lettura di uno sheet specifico, solo se appartiene a quel workspace:
-
-```text
-https://TUO-SITO.vercel.app/api/smartsheet?sheetId=ID_SHEET
-```
-
-Se provi a leggere uno sheet fuori dal workspace configurato, l'API risponde con errore `403`.

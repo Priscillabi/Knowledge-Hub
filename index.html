@@ -3,49 +3,66 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Knowledge Hub</title>
+    <title>Knowledge Base Aziendale</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">Smartsheet Workspace</p>
-          <h1>Knowledge Hub</h1>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-logo">
+          <div class="mark">KB</div>
+          <h1>Knowledge Base</h1>
+          <p>Risorse tecniche aziendali</p>
         </div>
-        <button id="refresh-button" type="button">Aggiorna</button>
-      </header>
+        <nav class="sidebar-nav">
+          <div class="nav-label">Vista</div>
+          <button class="nav-item active" id="nav-all" type="button" data-view="all"><span class="icon">●</span> Tutte le risorse</button>
+          <button class="nav-item" id="nav-popular" type="button" data-view="popular"><span class="icon">↑</span> Più visualizzate</button>
+          <div class="nav-sep"></div>
+          <div class="nav-label">Tipologia</div>
+          <div id="tipo-filters"></div>
+          <div class="nav-sep"></div>
+          <div class="nav-label">Strumento</div>
+          <div id="tool-filters"></div>
+          <div class="nav-sep"></div>
+          <button class="nav-item" id="reload-button" type="button"><span class="icon">↻</span> Aggiorna Smartsheet</button>
+        </nav>
+        <div class="sidebar-footer" id="sidebarFooter">Connessione a Smartsheet</div>
+      </aside>
 
-      <section class="status-panel" aria-live="polite">
-        <p id="status">Caricamento workspace...</p>
-      </section>
-
-      <section class="layout">
-        <aside class="sheet-list" aria-label="Fogli disponibili">
-          <div class="section-heading">
-            <h2>Fogli</h2>
-            <span id="sheet-count">0</span>
+      <div class="main">
+        <header class="topbar">
+          <div class="search-wrap">
+            <span class="search-icon">⌕</span>
+            <input type="text" id="searchInput" placeholder="Cerca in tutta la knowledge base..." />
+            <button class="search-clear" id="searchClear" type="button">×</button>
           </div>
-          <div id="sheets"></div>
-        </aside>
-
-        <section class="data-view" aria-label="Dati Smartsheet">
-          <div class="section-heading">
-            <div>
-              <h2 id="sheet-title">Seleziona un foglio</h2>
-              <p id="sheet-subtitle">I dati verranno letti dal workspace configurato su Vercel.</p>
-            </div>
+          <div class="topbar-right">
+            <span class="file-badge" id="fileBadge">Smartsheet</span>
+            <button class="btn btn-outline" id="export-button" type="button">↓ Esporta JSON</button>
           </div>
-          <div class="table-wrap">
-            <table>
-              <thead id="table-head"></thead>
-              <tbody id="table-body"></tbody>
-            </table>
+        </header>
+
+        <div class="stats-bar" id="statsBar"></div>
+
+        <section class="ai-section">
+          <div class="ai-bar">
+            <div class="ai-badge">AI</div>
+            <input type="text" id="aiInput" placeholder="Fai una domanda: Come gestire una Dynamic View? Query per KPI Power BI?..." />
+            <button class="ai-btn" id="ai-button" type="button">Chiedi →</button>
           </div>
         </section>
-      </section>
-    </main>
 
+        <main class="content">
+          <div id="mainArea"></div>
+        </main>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
     <script src="app.js"></script>
   </body>
 </html>

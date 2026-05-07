@@ -1,8 +1,10 @@
 const DEFAULT_BASE_URL = "https://api.smartsheet.com/2.0";
+const DEFAULT_SHEET_NAME = "Knowledge Hub";
 
 function getConfig() {
   const token = process.env.SMARTSHEET_ACCESS_TOKEN;
   const workspaceId = process.env.SMARTSHEET_WORKSPACE_ID;
+  const sheetName = process.env.SMARTSHEET_SHEET_NAME || DEFAULT_SHEET_NAME;
   const baseUrl = process.env.SMARTSHEET_BASE_URL || DEFAULT_BASE_URL;
 
   if (!token || !workspaceId) {
@@ -17,6 +19,7 @@ function getConfig() {
   return {
     token,
     workspaceId: String(workspaceId),
+    sheetName,
     baseUrl: baseUrl.replace(/\/$/, ""),
   };
 }
@@ -52,7 +55,6 @@ function collectSheets(node, sheets = []) {
       sheets.push({
         id: String(sheet.id),
         name: sheet.name,
-        permalink: sheet.permalink,
       });
     });
   }
@@ -64,37 +66,59 @@ function collectSheets(node, sheets = []) {
   return sheets;
 }
 
-function normalizeSheet(sheet) {
-  const columnsById = new Map(
-    (sheet.columns || []).map((column) => [
-      String(column.id),
-      {
-        id: String(column.id),
-        title: column.title,
-        type: column.type,
-      },
-    ]),
+function findSheetByName(workspace, targetName) {
+  const normalizedTarget = targetName.trim().toLowerCase();
+  return collectSheets(workspace).find(
+    (sheet) => String(sheet.name || "").trim().toLowerCase() === normalizedTarget,
   );
+}
+
+function cellText(cell) {
+  if (!cell) {
+    return "";
+  }
+
+  return String(cell.displayValue ?? cell.value ?? "").trim();
+}
+
+function rowToEntry(row, columnsById, index) {
+  const values = {};
+
+  (row.cells || []).forEach((cell) => {
+    const title = columnsById.get(String(cell.columnId));
+    if (title) {
+      values[title] = cellText(cell);
+    }
+  });
+
+  return {
+    id: String(row.id || index + 1),
+    rowNumber: row.rowNumber,
+    tag: values["TAG"] || "",
+    desc: values["Descrizione"] || "",
+    query: values["Inserire Formula o Query"] || "",
+    tipo: values["Tipologia di contenuto"] || "",
+    strumento: values["Strumento"] || "",
+    autore: values["Inserita da"] || "",
+    tagRicerca: values["TAG - Ricerca"] || "",
+  };
+}
+
+function normalizeKnowledgeHubSheet(sheet) {
+  const columnsById = new Map(
+    (sheet.columns || []).map((column) => [String(column.id), column.title]),
+  );
+
+  const entries = (sheet.rows || [])
+    .map((row, index) => rowToEntry(row, columnsById, index))
+    .filter((entry) => entry.desc || entry.tag || entry.query);
 
   return {
     id: String(sheet.id),
     name: sheet.name,
-    permalink: sheet.permalink,
+    totalRowCount: sheet.totalRowCount,
     columns: Array.from(columnsById.values()),
-    rows: (sheet.rows || []).map((row) => ({
-      id: String(row.id),
-      rowNumber: row.rowNumber,
-      cells: (row.cells || []).map((cell) => {
-        const column = columnsById.get(String(cell.columnId));
-
-        return {
-          columnId: String(cell.columnId),
-          columnTitle: column?.title,
-          value: cell.value ?? null,
-          displayValue: cell.displayValue ?? null,
-        };
-      }),
-    })),
+    entries,
   };
 }
 
@@ -108,38 +132,24 @@ module.exports = async function handler(request, response) {
   try {
     const config = getConfig();
     const workspace = await smartsheetFetch(`/workspaces/${config.workspaceId}`, config);
-    const allowedSheets = collectSheets(workspace);
-    const requestedSheetId = request.query.sheetId ? String(request.query.sheetId) : null;
+    const targetSheet = findSheetByName(workspace, config.sheetName);
 
-    if (!requestedSheetId) {
-      response.status(200).json({
-        workspace: {
-          id: config.workspaceId,
-          name: workspace.name,
-        },
-        sheets: allowedSheets,
+    if (!targetSheet) {
+      response.status(404).json({
+        error: "Sheet not found",
+        message: `Sheet "${config.sheetName}" was not found inside the configured workspace.`,
       });
       return;
     }
 
-    const isAllowed = allowedSheets.some((sheet) => sheet.id === requestedSheetId);
-
-    if (!isAllowed) {
-      response.status(403).json({
-        error: "Sheet not allowed",
-        message: "This API only reads sheets inside the configured Smartsheet workspace.",
-      });
-      return;
-    }
-
-    const sheet = await smartsheetFetch(`/sheets/${requestedSheetId}`, config);
+    const sheet = await smartsheetFetch(`/sheets/${targetSheet.id}`, config);
 
     response.status(200).json({
       workspace: {
         id: config.workspaceId,
         name: workspace.name,
       },
-      sheet: normalizeSheet(sheet),
+      sheet: normalizeKnowledgeHubSheet(sheet),
     });
   } catch (error) {
     response.status(error.statusCode || 500).json({
