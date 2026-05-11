@@ -1,11 +1,7 @@
 let db = [];
-let activeView = "all";
 let activeTipo = "all";
 let activeTool = "all";
-let activeFacet = {
-  section: null,
-  value: null,
-};
+let activeFacets = {};
 let searchTerm = "";
 
 const TOOL_COLORS = {
@@ -24,30 +20,12 @@ const TIPO_COLORS = {
 };
 
 const FACET_CONFIG = [
-  {
-    sectionName: "Smartsheet",
-    columns: ["Smartsheet - tecnica"],
-  },
-  {
-    sectionName: "Power BI",
-    columns: ["Power BI - tecnica"],
-  },
-  {
-    sectionName: "Power Query",
-    columns: ["Power Query - tecnica"],
-  },
-  {
-    sectionName: "Excel",
-    columns: ["Excel - tecnica"],
-  },
-  {
-    sectionName: "Virtus Flow",
-    columns: ["Virtus Flow - tecnica"],
-  },
-  {
-    sectionName: "Power Automate",
-    columns: ["Power Automate - tecnica"],
-  },
+  { sectionName: "Smartsheet", columns: ["Smartsheet - tecnica"] },
+  { sectionName: "Power BI", columns: ["Power BI - tecnica"] },
+  { sectionName: "Power Query", columns: ["Power Query - tecnica"] },
+  { sectionName: "Excel", columns: ["Excel - tecnica"] },
+  { sectionName: "Virtus Flow", columns: ["Virtus Flow - tecnica"] },
+  { sectionName: "Power Automate", columns: ["Power Automate - tecnica"] },
 ];
 
 const elements = {
@@ -59,27 +37,21 @@ const elements = {
   mainArea: document.querySelector("#mainArea"),
   searchInput: document.querySelector("#searchInput"),
   searchClear: document.querySelector("#searchClear"),
-  aiInput: document.querySelector("#aiInput"),
   fileBadge: document.querySelector("#fileBadge"),
   reloadButton: document.querySelector("#reload-button"),
   exportButton: document.querySelector("#export-button"),
-  aiButton: document.querySelector("#ai-button"),
 };
 
 function toolColor(tool) {
   for (const key in TOOL_COLORS) {
-    if (tool && tool.includes(key)) {
-      return TOOL_COLORS[key];
-    }
+    if (tool && tool.includes(key)) return TOOL_COLORS[key];
   }
   return "#6B665E";
 }
 
 function tipoColor(tipo) {
   for (const key in TIPO_COLORS) {
-    if (tipo && tipo.includes(key)) {
-      return TIPO_COLORS[key];
-    }
+    if (tipo && tipo.includes(key)) return TIPO_COLORS[key];
   }
   return "#6B665E";
 }
@@ -99,18 +71,57 @@ function splitValues(value) {
     .filter(Boolean);
 }
 
-function stableViews(item, index) {
-  const seed = `${item.tag}|${item.desc}|${item.strumento}|${index}`;
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) % 997;
+function parseDateValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  const isoDate = Date.parse(raw);
+  if (!Number.isNaN(isoDate)) return new Date(isoDate);
+
+  const italianMatch = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (italianMatch) {
+    const [, day, month, year] = italianMatch;
+    const fullYear = year.length === 2 ? `20${year}` : year;
+    const date = new Date(Number(fullYear), Number(month) - 1, Number(day));
+    if (!Number.isNaN(date.getTime())) return date;
   }
-  return 5 + (hash % 80);
+
+  return null;
 }
 
-function normalizeEntry(entry, index) {
+function formatDate(value) {
+  const date = parseDateValue(value);
+  if (!date) return "Data non disponibile";
+
+  return new Intl.DateTimeFormat("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function dateTimeValue(value) {
+  const date = parseDateValue(value);
+  return date ? date.getTime() : 0;
+}
+
+function resourceTitle(item) {
+  const explicitTitle = String(item.title || "").trim();
+  if (explicitTitle) return explicitTitle;
+
+  const description = String(item.desc || item.workaround || item.query || "Risorsa knowledge base")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return description.length > 180 ? `${description.slice(0, 177)}...` : description;
+}
+
+function normalizeEntry(entry) {
   return {
-    id: entry.id || String(index + 1),
+    id: entry.id,
+    title: String(entry.title || "").trim(),
+    displayTitle: resourceTitle(entry),
+    dataInserimento: String(entry.dataInserimento || "").trim(),
     tag: String(entry.tag || "").trim(),
     desc: String(entry.desc || "").trim(),
     query: String(entry.query || "").trim(),
@@ -121,7 +132,6 @@ function normalizeEntry(entry, index) {
     workaround: String(entry.workaround || "").trim(),
     technical: entry.technical || {},
     attachments: Array.isArray(entry.attachments) ? entry.attachments : [],
-    views: stableViews(entry, index),
   };
 }
 
@@ -138,10 +148,9 @@ async function loadKnowledgeHub() {
     }
 
     db = (data.sheet?.entries || []).map(normalizeEntry);
-    activeView = "all";
     activeTipo = "all";
     activeTool = "all";
-    activeFacet = { section: null, value: null };
+    activeFacets = {};
     searchTerm = "";
     elements.searchInput.value = "";
     elements.searchClear.style.display = "none";
@@ -164,9 +173,7 @@ async function loadKnowledgeHub() {
 
 function uniqueVals(key) {
   const values = new Set();
-  db.forEach((item) => {
-    splitValues(item[key]).forEach((value) => values.add(value));
-  });
+  db.forEach((item) => splitValues(item[key]).forEach((value) => values.add(value)));
   return [...values].sort();
 }
 
@@ -182,12 +189,16 @@ function itemFacetValues(item, sectionName, columns = []) {
   sourceValues.forEach((value) => {
     splitValues(value).forEach((part) => values.add(part));
   });
+
   return values;
 }
 
-function itemHasFacetValue(item, sectionName, value) {
+function itemMatchesFacetSelection(item, sectionName, values) {
+  if (!values.length) return true;
+
   const config = FACET_CONFIG.find((facet) => facet.sectionName === sectionName);
-  return itemFacetValues(item, sectionName, config?.columns || []).has(value);
+  const itemValues = itemFacetValues(item, sectionName, config?.columns || []);
+  return values.every((value) => itemValues.has(value));
 }
 
 function buildFilters() {
@@ -227,15 +238,7 @@ function buildFilters() {
 
   document.querySelectorAll("[data-facet-section]").forEach((button) => {
     button.addEventListener("click", () => {
-      const section = button.dataset.facetSection;
-      const value = button.dataset.facetValue;
-
-      if (activeFacet.section === section && activeFacet.value === value) {
-        activeFacet = { section: null, value: null };
-      } else {
-        activeFacet = { section, value };
-      }
-
+      toggleFacetSelection(button.dataset.facetSection, button.dataset.facetValue);
       buildFilters();
       render();
     });
@@ -258,9 +261,7 @@ function buildFacetFilters(sectionName, columns) {
   });
 
   const values = [...counts.keys()].sort();
-  if (!values.length) {
-    return "";
-  }
+  if (!values.length) return "";
 
   return `
     <div class="nav-sep"></div>
@@ -273,11 +274,30 @@ function buildFacetFilters(sectionName, columns) {
           value,
           toolColor(sectionName),
           counts.get(value),
-          activeFacet.section === sectionName && activeFacet.value === value,
+          getSelectedFacetValues(sectionName).includes(value),
           sectionName,
         ),
       )
       .join("")}`;
+}
+
+function getSelectedFacetValues(sectionName) {
+  return activeFacets[sectionName] || [];
+}
+
+function toggleFacetSelection(sectionName, value) {
+  const selected = new Set(getSelectedFacetValues(sectionName));
+
+  if (selected.has(value)) selected.delete(value);
+  else selected.add(value);
+
+  if (selected.size) {
+    activeFacets = { ...activeFacets, [sectionName]: [...selected] };
+  } else {
+    const next = { ...activeFacets };
+    delete next[sectionName];
+    activeFacets = next;
+  }
 }
 
 function filterButton(kind, value, label, color, count, active, sectionName = "") {
@@ -298,14 +318,6 @@ function filterButton(kind, value, label, color, count, active, sectionName = ""
     </button>`;
 }
 
-function setView(view) {
-  activeView = view;
-  document.querySelectorAll("[data-view]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === view);
-  });
-  render();
-}
-
 function getFiltered() {
   let items = [...db];
 
@@ -317,13 +329,9 @@ function getFiltered() {
     items = items.filter((item) => itemHasSplitValue(item, "strumento", activeTool));
   }
 
-  if (activeFacet.section && activeFacet.value) {
-    items = items.filter((item) => itemHasFacetValue(item, activeFacet.section, activeFacet.value));
-  }
-
-  if (activeView === "popular") {
-    items = items.slice().sort((a, b) => b.views - a.views).slice(0, 10);
-  }
+  Object.entries(activeFacets).forEach(([sectionName, values]) => {
+    items = items.filter((item) => itemMatchesFacetSelection(item, sectionName, values));
+  });
 
   if (searchTerm) {
     const term = searchTerm.toLowerCase();
@@ -332,20 +340,22 @@ function getFiltered() {
     );
   }
 
-  const sort = document.querySelector("#sortSelect")?.value || "default";
-  if (sort === "views") {
-    items.sort((a, b) => b.views - a.views);
-  }
+  return sortByMostRecent(items);
+}
 
-  return items;
+function sortByMostRecent(items) {
+  return items.sort((a, b) => dateTimeValue(b.dataInserimento) - dateTimeValue(a.dataInserimento));
 }
 
 function searchableValues(item) {
   const technicalValues = Object.values(item.technical || {}).flatMap((section) => Object.values(section || {}));
   const attachmentNames = item.attachments.map((attachment) => attachment.name);
+
   return [
+    item.displayTitle,
     item.desc,
     item.workaround,
+    item.dataInserimento,
     item.tag,
     item.query,
     item.tipo,
@@ -376,17 +386,10 @@ function render() {
   elements.mainArea.innerHTML = `
     <div class="content-header">
       <div class="results-info" id="resultsInfo"></div>
-      <div class="sort-wrap">
-        Ordina per
-        <select id="sortSelect">
-          <option value="default">Pertinenza</option>
-          <option value="views">Piu visualizzate</option>
-        </select>
-      </div>
+      <div class="sort-wrap">Ordinamento: <strong>Piu recente</strong></div>
     </div>
     <div class="cards" id="cards"></div>`;
 
-  document.querySelector("#sortSelect").addEventListener("change", render);
   document.querySelector("#resultsInfo").innerHTML = searchTerm
     ? `<strong>${filtered.length}</strong> risultati per "<strong>${escHtml(searchTerm)}</strong>"`
     : `<strong>${filtered.length}</strong> risorse`;
@@ -405,10 +408,10 @@ function render() {
   cards.innerHTML = filtered.map(cardTemplate).join("");
 
   document.querySelectorAll(".card").forEach((card) => {
-    card.addEventListener("click", () => toggleCard(card.dataset.id));
+    card.addEventListener("click", () => card.classList.toggle("open"));
   });
 
-    document.querySelectorAll("[data-copy-id]").forEach((button) => {
+  document.querySelectorAll("[data-copy-id]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       copyItem(button.dataset.copyId);
@@ -424,13 +427,12 @@ function render() {
 }
 
 function cardTemplate(item, index) {
-  const title = item.desc.length > 180 ? `${item.desc.substring(0, 180)}...` : item.desc;
   const toolLabel = item.strumento.length > 28 ? `${item.strumento.substring(0, 28)}...` : item.strumento;
 
   return `
     <article class="card" id="card-${escAttr(item.id)}" data-id="${escAttr(item.id)}" style="animation-delay:${Math.min(index, 12) * 0.03}s">
       <div class="card-head">
-        <div class="card-title">${highlight(title, searchTerm)}</div>
+        <div class="card-title">${highlight(item.displayTitle, searchTerm)}</div>
         <div class="card-badges">
           ${item.tipo ? `<span class="badge ${tipoBadge(item.tipo)}">${escHtml(item.tipo)}</span>` : ""}
           ${item.strumento ? `<span class="badge badge-tool" style="background:${toolColor(item.strumento)}1A;color:${toolColor(item.strumento)}">${escHtml(toolLabel)}</span>` : ""}
@@ -442,7 +444,7 @@ function cardTemplate(item, index) {
         ${item.tag ? `<span class="meta-item">Tag: ${escHtml(item.tag)}</span>` : ""}
         ${item.autore ? `<span class="meta-item">Autore: ${escHtml(item.autore.split("@")[0])}</span>` : ""}
         ${item.query ? `<span class="meta-item">Formula/Query presente</span>` : ""}
-        <span class="meta-item">${item.views} viste</span>
+        <span class="meta-item">Data Inserimento: ${escHtml(formatDate(item.dataInserimento))}</span>
       </div>
       <div class="card-detail">
         <div class="detail-label">Descrizione completa</div>
@@ -466,9 +468,7 @@ function renderTechnicalDetails(item) {
     })),
   );
 
-  if (!chips.length) {
-    return "";
-  }
+  if (!chips.length) return "";
 
   return `
     <div class="detail-label with-gap">Funzionalita tecniche</div>
@@ -478,15 +478,11 @@ function renderTechnicalDetails(item) {
 }
 
 function renderAttachments(attachments) {
-  if (!attachments.length) {
-    return "";
-  }
+  if (!attachments.length) return "";
 
   return `
     <div class="detail-label with-gap">Allegati</div>
-    <div class="attachments-list">
-      ${attachments.map(attachmentTemplate).join("")}
-    </div>
+    <div class="attachments-list">${attachments.map(attachmentTemplate).join("")}</div>
     <p class="attachment-note">Il link viene richiesto a Smartsheet al momento dell'apertura e puo essere temporaneo.</p>`;
 }
 
@@ -512,6 +508,11 @@ function attachmentTemplate(attachment) {
     </div>`;
 }
 
+function fileExtension(name) {
+  const match = String(name || "").match(/\.([a-z0-9]+)$/i);
+  return match ? match[1].toUpperCase() : "";
+}
+
 async function openAttachment(button) {
   const attachmentId = button.dataset.openAttachmentId;
   const originalText = button.textContent;
@@ -534,11 +535,6 @@ async function openAttachment(button) {
     button.disabled = false;
     button.textContent = originalText;
   }
-}
-
-function fileExtension(name) {
-  const match = String(name || "").match(/\.([a-z0-9]+)$/i);
-  return match ? match[1].toUpperCase() : "";
 }
 
 function renderLoading() {
@@ -568,16 +564,6 @@ function renderError(message) {
       <p>${escHtml(message)}</p>
     </div>`;
   showToast("Errore durante il caricamento da Smartsheet");
-}
-
-function toggleCard(id) {
-  const card = document.querySelector(`#card-${CSS.escape(id)}`);
-  card.classList.toggle("open");
-
-  if (card.classList.contains("open")) {
-    const item = db.find((entry) => entry.id === id);
-    if (item) item.views += 1;
-  }
 }
 
 function onSearch(value) {
@@ -612,29 +598,6 @@ function exportData() {
   showToast("Esportazione completata");
 }
 
-function sendAiQuery() {
-  const query = elements.aiInput.value.trim();
-  if (!query) return;
-  if (!db.length) {
-    showToast("Carica prima i dati da Smartsheet");
-    return;
-  }
-
-  const terms = query.toLowerCase().split(" ").filter((word) => word.length > 3);
-  const matches = db.filter((item) =>
-    terms.some((word) => searchableValues(item).some((value) => String(value || "").toLowerCase().includes(word))),
-  );
-
-  if (matches.length) {
-    const keyword = terms.sort((a, b) => b.length - a.length)[0];
-    elements.searchInput.value = keyword;
-    onSearch(keyword);
-    showToast(`Trovate ${matches.length} risorse pertinenti`);
-  } else {
-    showToast("Nessuna risorsa trovata. Prova con altre parole.");
-  }
-}
-
 function showToast(message) {
   const toast = document.querySelector("#toast");
   toast.textContent = message;
@@ -643,9 +606,7 @@ function showToast(message) {
 }
 
 function highlight(text, term) {
-  if (!term || !text) {
-    return escHtml(text || "");
-  }
+  if (!term || !text) return escHtml(text || "");
 
   const safeTerm = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const regex = new RegExp(`(${safeTerm})`, "gi");
@@ -663,19 +624,9 @@ function escAttr(value) {
   return escHtml(value).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-document.querySelectorAll("[data-view]").forEach((button) => {
-  button.addEventListener("click", () => setView(button.dataset.view));
-});
-
 elements.searchInput.addEventListener("input", () => onSearch(elements.searchInput.value));
 elements.searchClear.addEventListener("click", clearSearch);
 elements.reloadButton.addEventListener("click", loadKnowledgeHub);
 elements.exportButton.addEventListener("click", exportData);
-elements.aiButton.addEventListener("click", sendAiQuery);
-elements.aiInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    sendAiQuery();
-  }
-});
 
 loadKnowledgeHub();

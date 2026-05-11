@@ -134,6 +134,8 @@ function rowToEntry(row, columnsById, index) {
   return {
     id: String(row.id || index + 1),
     rowNumber: row.rowNumber,
+    title: values["Titolo"] || "",
+    dataInserimento: values["Data Inserimento"] || "",
     tag: values["TAG"] || "",
     desc: values["Descrizione"] || "",
     query: values["Inserire Formula o Query"] || "",

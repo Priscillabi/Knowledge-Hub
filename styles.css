@@ -340,54 +340,6 @@ select {
   font-weight: 600;
 }
 
-.ai-section {
-  padding: 18px 28px 0;
-}
-
-.ai-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 15px;
-  border: 1px solid #d4cffb;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #f0effe, #eef4fe);
-}
-
-.ai-badge {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  background: var(--purple);
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.ai-bar input {
-  flex: 1;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 14px;
-}
-
-.ai-btn {
-  flex-shrink: 0;
-  border: 0;
-  border-radius: 8px;
-  padding: 7px 14px;
-  background: var(--purple);
-  color: #ffffff;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-}
-
 .content {
   flex: 1;
   padding: 20px 28px;
@@ -794,7 +746,6 @@ select {
 
   .topbar,
   .content,
-  .ai-section,
   .stats-bar {
     padding-left: 16px;
     padding-right: 16px;
@@ -811,8 +762,7 @@ select {
     justify-content: space-between;
   }
 
-  .content-header,
-  .ai-bar {
+  .content-header {
     align-items: stretch;
     flex-direction: column;
   }
