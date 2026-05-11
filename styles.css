@@ -526,6 +526,11 @@ select {
   color: var(--purple);
 }
 
+.badge-attachment {
+  background: #ede7d8;
+  color: var(--accent);
+}
+
 .expand-icon {
   flex-shrink: 0;
   margin-left: 4px;
@@ -593,6 +598,104 @@ select {
   font-family: var(--mono);
   font-size: 12px;
   line-height: 1.65;
+}
+
+.technical-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.technical-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface2);
+  color: var(--text2);
+  font-size: 12px;
+}
+
+.attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfaf7;
+}
+
+.attachment-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.attachment-icon {
+  min-width: 34px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--blue-bg);
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.attachment-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-meta,
+.attachment-note {
+  color: var(--text3);
+  font-size: 11px;
+}
+
+.attachment-link {
+  flex-shrink: 0;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 5px 10px;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.attachment-link:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.attachment-unavailable {
+  flex-shrink: 0;
+  color: var(--text3);
+  font-size: 12px;
+}
+
+.attachment-note {
+  margin-top: 7px;
 }
 
 .card-detail-actions {

@@ -1,9 +1,18 @@
 const DEFAULT_BASE_URL = "https://api.smartsheet.com/2.0";
 const DEFAULT_SHEET_NAME = "Knowledge Hub";
+const TECHNICAL_COLUMN_GROUPS = {
+  Smartsheet: ["Smartsheet", "Smartsheet - tecnica", "Specifica Altro [Smartsheet]"],
+  "Power BI": ["Power BI", "Power BI - tecnica", "Specifica Altro [Power BI]"],
+  "Power Query": ["Power Query", "Power Query - tecnica", "Specifica Altro [Power Query]"],
+  Excel: ["Excel", "Excel - tecnica", "Specifica Altro [Excel]"],
+  "Virtus Flow": ["Virtus Flow", "Virtus Flow - tecnica", "Specifica Altro [Virtus Flow]"],
+  "Power Automate": ["Power Automate", "Power Automate - tecnica", "Specifica Altro [Power Automate]"],
+};
 
 function getConfig() {
   const token = process.env.SMARTSHEET_ACCESS_TOKEN;
   const workspaceId = process.env.SMARTSHEET_WORKSPACE_ID;
+  const sheetId = process.env.SMARTSHEET_SHEET_ID;
   const sheetName = process.env.SMARTSHEET_SHEET_NAME || DEFAULT_SHEET_NAME;
   const baseUrl = process.env.SMARTSHEET_BASE_URL || DEFAULT_BASE_URL;
 
@@ -19,6 +28,7 @@ function getConfig() {
   return {
     token,
     workspaceId: String(workspaceId),
+    sheetId: sheetId ? String(sheetId) : null,
     sheetName,
     baseUrl: baseUrl.replace(/\/$/, ""),
   };
@@ -66,10 +76,18 @@ function collectSheets(node, sheets = []) {
   return sheets;
 }
 
-function findSheetByName(workspace, targetName) {
-  const normalizedTarget = targetName.trim().toLowerCase();
-  return collectSheets(workspace).find(
-    (sheet) => String(sheet.name || "").trim().toLowerCase() === normalizedTarget,
+function findSheet(workspace, config) {
+  const sheets = collectSheets(workspace);
+
+  if (config.sheetId) {
+    return sheets.find((sheet) => sheet.id === config.sheetId);
+  }
+
+  const normalizedTarget = config.sheetName.trim().toLowerCase();
+  return sheets.find(
+    (sheet) =>
+      String(sheet.name || "").trim().toLowerCase() === normalizedTarget ||
+      sheet.id === String(config.sheetName),
   );
 }
 
@@ -79,6 +97,29 @@ function cellText(cell) {
   }
 
   return String(cell.displayValue ?? cell.value ?? "").trim();
+}
+
+function attachmentToResource(attachment) {
+  return {
+    id: String(attachment.id || ""),
+    name: attachment.name || "Allegato",
+    attachmentType: attachment.attachmentType || "",
+    attachmentSubType: attachment.attachmentSubType || "",
+    mimeType: attachment.mimeType || "",
+    sizeInKb: attachment.sizeInKb ?? null,
+    url: attachment.url || "",
+    urlExpiresInMillis: attachment.urlExpiresInMillis ?? null,
+  };
+}
+
+function technicalValues(values, columns) {
+  return columns.reduce((result, column) => {
+    const value = values[column];
+    if (value) {
+      result[column] = value;
+    }
+    return result;
+  }, {});
 }
 
 function rowToEntry(row, columnsById, index) {
@@ -101,6 +142,16 @@ function rowToEntry(row, columnsById, index) {
     strumento: values["Strumento"] || "",
     autore: values["Inserita da"] || "",
     tagRicerca: values["TAG - Ricerca"] || "",
+    workaround: values["Workaround"] || "",
+    technical: Object.fromEntries(
+      Object.entries(TECHNICAL_COLUMN_GROUPS).map(([sectionName, columns]) => [
+        sectionName,
+        technicalValues(values, columns),
+      ]),
+    ),
+    attachments: Array.isArray(row.attachments)
+      ? row.attachments.map(attachmentToResource).filter((attachment) => attachment.id || attachment.name)
+      : [],
   };
 }
 
@@ -111,7 +162,10 @@ function normalizeKnowledgeHubSheet(sheet) {
 
   const entries = (sheet.rows || [])
     .map((row, index) => rowToEntry(row, columnsById, index))
-    .filter((entry) => entry.desc || entry.tag || entry.query);
+    .filter((entry) => {
+      const hasTechnicalValues = Object.values(entry.technical).some((section) => Object.keys(section).length);
+      return entry.desc || entry.tag || entry.query || entry.workaround || hasTechnicalValues || entry.attachments.length;
+    });
 
   return {
     id: String(sheet.id),
@@ -132,17 +186,17 @@ module.exports = async function handler(request, response) {
   try {
     const config = getConfig();
     const workspace = await smartsheetFetch(`/workspaces/${config.workspaceId}`, config);
-    const targetSheet = findSheetByName(workspace, config.sheetName);
+    const targetSheet = findSheet(workspace, config);
 
     if (!targetSheet) {
       response.status(404).json({
         error: "Sheet not found",
-        message: `Sheet "${config.sheetName}" was not found inside the configured workspace.`,
+        message: `Sheet "${config.sheetId || config.sheetName}" was not found inside the configured workspace.`,
       });
       return;
     }
 
-    const sheet = await smartsheetFetch(`/sheets/${targetSheet.id}`, config);
+    const sheet = await smartsheetFetch(`/sheets/${targetSheet.id}?include=attachments`, config);
 
     response.status(200).json({
       workspace: {

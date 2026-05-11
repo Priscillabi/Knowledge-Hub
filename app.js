@@ -2,6 +2,10 @@ let db = [];
 let activeView = "all";
 let activeTipo = "all";
 let activeTool = "all";
+let activeFacet = {
+  section: null,
+  value: null,
+};
 let searchTerm = "";
 
 const TOOL_COLORS = {
@@ -19,9 +23,37 @@ const TIPO_COLORS = {
   Template: "#185FA5",
 };
 
+const FACET_CONFIG = [
+  {
+    sectionName: "Smartsheet",
+    columns: ["Smartsheet", "Smartsheet - tecnica", "Specifica Altro [Smartsheet]"],
+  },
+  {
+    sectionName: "Power BI",
+    columns: ["Power BI", "Power BI - tecnica", "Specifica Altro [Power BI]"],
+  },
+  {
+    sectionName: "Power Query",
+    columns: ["Power Query", "Power Query - tecnica", "Specifica Altro [Power Query]"],
+  },
+  {
+    sectionName: "Excel",
+    columns: ["Excel", "Excel - tecnica", "Specifica Altro [Excel]"],
+  },
+  {
+    sectionName: "Virtus Flow",
+    columns: ["Virtus Flow", "Virtus Flow - tecnica", "Specifica Altro [Virtus Flow]"],
+  },
+  {
+    sectionName: "Power Automate",
+    columns: ["Power Automate", "Power Automate - tecnica", "Specifica Altro [Power Automate]"],
+  },
+];
+
 const elements = {
   tipoFilters: document.querySelector("#tipo-filters"),
   toolFilters: document.querySelector("#tool-filters"),
+  facetFilters: document.querySelector("#facet-filters"),
   sidebarFooter: document.querySelector("#sidebarFooter"),
   statsBar: document.querySelector("#statsBar"),
   mainArea: document.querySelector("#mainArea"),
@@ -60,6 +92,13 @@ function tipoBadge(tipo) {
   return "badge-other";
 }
 
+function splitValues(value) {
+  return String(value || "")
+    .split(/[\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function stableViews(item, index) {
   const seed = `${item.tag}|${item.desc}|${item.strumento}|${index}`;
   let hash = 0;
@@ -79,6 +118,9 @@ function normalizeEntry(entry, index) {
     strumento: String(entry.strumento || "").trim(),
     autore: String(entry.autore || "").trim(),
     tagRicerca: String(entry.tagRicerca || "").trim(),
+    workaround: String(entry.workaround || "").trim(),
+    technical: entry.technical || {},
+    attachments: Array.isArray(entry.attachments) ? entry.attachments : [],
     views: stableViews(entry, index),
   };
 }
@@ -99,11 +141,12 @@ async function loadKnowledgeHub() {
     activeView = "all";
     activeTipo = "all";
     activeTool = "all";
+    activeFacet = { section: null, value: null };
     searchTerm = "";
     elements.searchInput.value = "";
     elements.searchClear.style.display = "none";
     elements.fileBadge.style.display = "inline-flex";
-    elements.sidebarFooter.textContent = `${data.workspace?.name || "Workspace"} · ${data.sheet?.name || "Knowledge Hub"}`;
+    elements.sidebarFooter.textContent = `${data.workspace?.name || "Workspace"} - ${data.sheet?.name || "Knowledge Hub"}`;
 
     buildFilters();
     updateStats();
@@ -122,35 +165,46 @@ async function loadKnowledgeHub() {
 function uniqueVals(key) {
   const values = new Set();
   db.forEach((item) => {
-    if (!item[key]) return;
-    item[key].split(/[,;/]/).forEach((value) => {
-      const cleaned = value.trim();
-      if (cleaned) values.add(cleaned);
-    });
+    splitValues(item[key]).forEach((value) => values.add(value));
   });
   return [...values].sort();
 }
 
-function countByExact(key, value) {
-  return db.filter((item) => item[key] === value).length;
+function itemHasSplitValue(item, key, value) {
+  return splitValues(item[key]).includes(value);
 }
 
-function countByIncludes(key, value) {
-  return db.filter((item) => item[key] && item[key].includes(value)).length;
+function itemFacetValues(item, sectionName) {
+  const section = item.technical?.[sectionName] || {};
+  const values = new Set();
+  Object.values(section).forEach((value) => {
+    splitValues(value).forEach((part) => values.add(part));
+  });
+  return values;
+}
+
+function itemHasFacetValue(item, sectionName, value) {
+  return itemFacetValues(item, sectionName).has(value);
 }
 
 function buildFilters() {
   const tipos = uniqueVals("tipo");
   elements.tipoFilters.innerHTML = [
     filterButton("tipo", "all", "Tutte", "#A09A91", db.length, activeTipo === "all"),
-    ...tipos.map((tipo) => filterButton("tipo", tipo, tipo, tipoColor(tipo), countByExact("tipo", tipo), activeTipo === tipo)),
+    ...tipos.map((tipo) =>
+      filterButton("tipo", tipo, tipo, tipoColor(tipo), db.filter((item) => itemHasSplitValue(item, "tipo", tipo)).length, activeTipo === tipo),
+    ),
   ].join("");
 
   const tools = uniqueVals("strumento");
   elements.toolFilters.innerHTML = [
     filterButton("tool", "all", "Tutti", "#A09A91", db.length, activeTool === "all"),
-    ...tools.map((tool) => filterButton("tool", tool, tool, toolColor(tool), countByIncludes("strumento", tool), activeTool === tool)),
+    ...tools.map((tool) =>
+      filterButton("tool", tool, tool, toolColor(tool), db.filter((item) => itemHasSplitValue(item, "strumento", tool)).length, activeTool === tool),
+    ),
   ].join("");
+
+  elements.facetFilters.innerHTML = buildFacetSections();
 
   document.querySelectorAll("[data-tipo]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -167,9 +221,72 @@ function buildFilters() {
       render();
     });
   });
+
+  document.querySelectorAll("[data-facet-section]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const section = button.dataset.facetSection;
+      const value = button.dataset.facetValue;
+
+      if (activeFacet.section === section && activeFacet.value === value) {
+        activeFacet = { section: null, value: null };
+      } else {
+        activeFacet = { section, value };
+      }
+
+      buildFilters();
+      render();
+    });
+  });
 }
 
-function filterButton(kind, value, label, color, count, active) {
+function buildFacetSections() {
+  return FACET_CONFIG.map((config) => buildFacetFilters(config.sectionName, config.columns))
+    .filter(Boolean)
+    .join("");
+}
+
+function buildFacetFilters(sectionName, columns) {
+  const counts = new Map();
+
+  db.forEach((item) => {
+    itemFacetValues(item, sectionName).forEach((value) => {
+      counts.set(value, (counts.get(value) || 0) + 1);
+    });
+  });
+
+  const values = [...counts.keys()].sort();
+  if (!values.length) {
+    return "";
+  }
+
+  return `
+    <div class="nav-sep"></div>
+    <div class="nav-label">${escHtml(sectionName)}</div>
+    ${values
+      .map((value) =>
+        filterButton(
+          "facet",
+          value,
+          value,
+          toolColor(sectionName),
+          counts.get(value),
+          activeFacet.section === sectionName && activeFacet.value === value,
+          sectionName,
+        ),
+      )
+      .join("")}`;
+}
+
+function filterButton(kind, value, label, color, count, active, sectionName = "") {
+  if (kind === "facet") {
+    return `
+      <button class="filter-item ${active ? "active" : ""}" type="button" data-facet-section="${escAttr(sectionName)}" data-facet-value="${escAttr(value)}">
+        <span class="filter-dot" style="background:${color}"></span>
+        <span class="filter-name">${escHtml(label)}</span>
+        <span class="filter-count">${count}</span>
+      </button>`;
+  }
+
   return `
     <button class="filter-item ${active ? "active" : ""}" type="button" data-${kind}="${escAttr(value)}">
       <span class="filter-dot" style="background:${color}"></span>
@@ -190,11 +307,15 @@ function getFiltered() {
   let items = [...db];
 
   if (activeTipo !== "all") {
-    items = items.filter((item) => item.tipo === activeTipo);
+    items = items.filter((item) => itemHasSplitValue(item, "tipo", activeTipo));
   }
 
   if (activeTool !== "all") {
-    items = items.filter((item) => item.strumento && item.strumento.includes(activeTool));
+    items = items.filter((item) => itemHasSplitValue(item, "strumento", activeTool));
+  }
+
+  if (activeFacet.section && activeFacet.value) {
+    items = items.filter((item) => itemHasFacetValue(item, activeFacet.section, activeFacet.value));
   }
 
   if (activeView === "popular") {
@@ -204,8 +325,7 @@ function getFiltered() {
   if (searchTerm) {
     const term = searchTerm.toLowerCase();
     items = items.filter((item) =>
-      [item.desc, item.tag, item.query, item.tipo, item.strumento, item.autore, item.tagRicerca]
-        .some((value) => String(value || "").toLowerCase().includes(term)),
+      searchableValues(item).some((value) => String(value || "").toLowerCase().includes(term)),
     );
   }
 
@@ -217,11 +337,28 @@ function getFiltered() {
   return items;
 }
 
+function searchableValues(item) {
+  const technicalValues = Object.values(item.technical || {}).flatMap((section) => Object.values(section || {}));
+  const attachmentNames = item.attachments.map((attachment) => attachment.name);
+  return [
+    item.desc,
+    item.workaround,
+    item.tag,
+    item.query,
+    item.tipo,
+    item.strumento,
+    item.autore,
+    item.tagRicerca,
+    ...technicalValues,
+    ...attachmentNames,
+  ];
+}
+
 function updateStats() {
-  const tools = new Set(db.map((item) => item.strumento).filter(Boolean)).size;
+  const tools = new Set(db.flatMap((item) => splitValues(item.strumento))).size;
   elements.statsBar.innerHTML = `
     <div class="stat-pill"><strong>${db.length}</strong> risorse totali</div>
-    <div class="stat-pill"><strong>${db.filter((item) => item.tipo === "Best Practice").length}</strong> best practice</div>
+    <div class="stat-pill"><strong>${db.filter((item) => itemHasSplitValue(item, "tipo", "Best Practice")).length}</strong> best practice</div>
     <div class="stat-pill"><strong>${db.filter((item) => item.query).length}</strong> con formula/query</div>
     <div class="stat-pill"><strong>${tools}</strong> strumenti</div>`;
 }
@@ -240,7 +377,7 @@ function render() {
         Ordina per
         <select id="sortSelect">
           <option value="default">Pertinenza</option>
-          <option value="views">Più visualizzate</option>
+          <option value="views">Piu visualizzate</option>
         </select>
       </div>
     </div>
@@ -255,7 +392,7 @@ function render() {
   if (!filtered.length) {
     cards.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">○</div>
+        <div class="empty-icon">0</div>
         <h3>Nessun risultato</h3>
         <p>Prova con termini diversi o cambia i filtri.</p>
       </div>`;
@@ -287,7 +424,8 @@ function cardTemplate(item, index) {
         <div class="card-badges">
           ${item.tipo ? `<span class="badge ${tipoBadge(item.tipo)}">${escHtml(item.tipo)}</span>` : ""}
           ${item.strumento ? `<span class="badge badge-tool" style="background:${toolColor(item.strumento)}1A;color:${toolColor(item.strumento)}">${escHtml(toolLabel)}</span>` : ""}
-          <span class="expand-icon">▾</span>
+          ${item.attachments.length ? `<span class="badge badge-attachment">${item.attachments.length} allegati</span>` : ""}
+          <span class="expand-icon">v</span>
         </div>
       </div>
       <div class="card-meta">
@@ -299,7 +437,10 @@ function cardTemplate(item, index) {
       <div class="card-detail">
         <div class="detail-label">Descrizione completa</div>
         <p class="detail-text">${escHtml(item.desc).replace(/\n/g, "<br>")}</p>
+        ${item.workaround ? `<div class="detail-label with-gap">Workaround</div><p class="detail-text">${escHtml(item.workaround).replace(/\n/g, "<br>")}</p>` : ""}
+        ${renderTechnicalDetails(item)}
         ${item.query ? `<div class="detail-label with-gap">Formula / Query</div><div class="card-detail-code">${escHtml(item.query)}</div>` : ""}
+        ${renderAttachments(item.attachments)}
         <div class="card-detail-actions">
           <button class="card-action" type="button" data-copy-id="${escAttr(item.id)}">Copia ${item.query ? "query" : "testo"}</button>
         </div>
@@ -307,10 +448,69 @@ function cardTemplate(item, index) {
     </article>`;
 }
 
+function renderTechnicalDetails(item) {
+  const chips = FACET_CONFIG.flatMap((config) =>
+    [...itemFacetValues(item, config.sectionName)].map((value) => ({
+      sectionName: config.sectionName,
+      value,
+    })),
+  );
+
+  if (!chips.length) {
+    return "";
+  }
+
+  return `
+    <div class="detail-label with-gap">Funzionalita tecniche</div>
+    <div class="technical-chips">
+      ${chips.map((chip) => `<span class="technical-chip">${escHtml(chip.sectionName)}: ${escHtml(chip.value)}</span>`).join("")}
+    </div>`;
+}
+
+function renderAttachments(attachments) {
+  if (!attachments.length) {
+    return "";
+  }
+
+  return `
+    <div class="detail-label with-gap">Allegati</div>
+    <div class="attachments-list">
+      ${attachments.map(attachmentTemplate).join("")}
+    </div>
+    <p class="attachment-note">I link Smartsheet possono richiedere autenticazione o scadere se sono URL temporanei.</p>`;
+}
+
+function attachmentTemplate(attachment) {
+  const extension = fileExtension(attachment.name) || attachment.mimeType || attachment.attachmentType || "file";
+  const size = attachment.sizeInKb ? `${Math.round(attachment.sizeInKb)} KB` : "";
+  const meta = [extension, size].filter(Boolean).join(" - ");
+
+  return `
+    <div class="attachment-item">
+      <div class="attachment-main">
+        <span class="attachment-icon">file</span>
+        <div>
+          <div class="attachment-name">${escHtml(attachment.name || "Allegato")}</div>
+          ${meta ? `<div class="attachment-meta">${escHtml(meta)}</div>` : ""}
+        </div>
+      </div>
+      ${
+        attachment.url
+          ? `<a class="attachment-link" href="${escAttr(attachment.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Apri allegato</a>`
+          : `<span class="attachment-unavailable">Link non disponibile</span>`
+      }
+    </div>`;
+}
+
+function fileExtension(name) {
+  const match = String(name || "").match(/\.([a-z0-9]+)$/i);
+  return match ? match[1].toUpperCase() : "";
+}
+
 function renderLoading() {
   elements.mainArea.innerHTML = `
     <div class="empty-state">
-      <div class="empty-icon">↻</div>
+      <div class="empty-icon">...</div>
       <h3>Caricamento da Smartsheet</h3>
       <p>Lettura del foglio Knowledge Hub nel workspace configurato.</p>
     </div>`;
@@ -319,7 +519,7 @@ function renderLoading() {
 function renderEmpty() {
   elements.mainArea.innerHTML = `
     <div class="empty-state">
-      <div class="empty-icon">□</div>
+      <div class="empty-icon">0</div>
       <h3>Nessuna risorsa disponibile</h3>
       <p>Il foglio Smartsheet non contiene ancora righe compatibili.</p>
     </div>`;
@@ -388,9 +588,7 @@ function sendAiQuery() {
 
   const terms = query.toLowerCase().split(" ").filter((word) => word.length > 3);
   const matches = db.filter((item) =>
-    terms.some((word) =>
-      [item.desc, item.tag, item.query, item.strumento].some((value) => String(value || "").toLowerCase().includes(word)),
-    ),
+    terms.some((word) => searchableValues(item).some((value) => String(value || "").toLowerCase().includes(word))),
   );
 
   if (matches.length) {

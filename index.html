@@ -19,8 +19,8 @@
         </div>
         <nav class="sidebar-nav">
           <div class="nav-label">Vista</div>
-          <button class="nav-item active" id="nav-all" type="button" data-view="all"><span class="icon">●</span> Tutte le risorse</button>
-          <button class="nav-item" id="nav-popular" type="button" data-view="popular"><span class="icon">↑</span> Più visualizzate</button>
+          <button class="nav-item active" id="nav-all" type="button" data-view="all"><span class="icon">*</span> Tutte le risorse</button>
+          <button class="nav-item" id="nav-popular" type="button" data-view="popular"><span class="icon">^</span> Piu visualizzate</button>
           <div class="nav-sep"></div>
           <div class="nav-label">Tipologia</div>
           <div id="tipo-filters"></div>
@@ -28,7 +28,8 @@
           <div class="nav-label">Strumento</div>
           <div id="tool-filters"></div>
           <div class="nav-sep"></div>
-          <button class="nav-item" id="reload-button" type="button"><span class="icon">↻</span> Aggiorna Smartsheet</button>
+          <div id="facet-filters"></div>
+          <button class="nav-item" id="reload-button" type="button"><span class="icon">R</span> Aggiorna Smartsheet</button>
         </nav>
         <div class="sidebar-footer" id="sidebarFooter">Connessione a Smartsheet</div>
       </aside>
@@ -36,13 +37,13 @@
       <div class="main">
         <header class="topbar">
           <div class="search-wrap">
-            <span class="search-icon">⌕</span>
+            <span class="search-icon">Cerca</span>
             <input type="text" id="searchInput" placeholder="Cerca in tutta la knowledge base..." />
-            <button class="search-clear" id="searchClear" type="button">×</button>
+            <button class="search-clear" id="searchClear" type="button">x</button>
           </div>
           <div class="topbar-right">
             <span class="file-badge" id="fileBadge">Smartsheet</span>
-            <button class="btn btn-outline" id="export-button" type="button">↓ Esporta JSON</button>
+            <button class="btn btn-outline" id="export-button" type="button">Esporta JSON</button>
           </div>
         </header>
 
@@ -52,7 +53,7 @@
           <div class="ai-bar">
             <div class="ai-badge">AI</div>
             <input type="text" id="aiInput" placeholder="Fai una domanda: Come gestire una Dynamic View? Query per KPI Power BI?..." />
-            <button class="ai-btn" id="ai-button" type="button">Chiedi →</button>
+            <button class="ai-btn" id="ai-button" type="button">Chiedi</button>
           </div>
         </section>
 

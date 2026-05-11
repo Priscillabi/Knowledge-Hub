@@ -39,6 +39,14 @@ ID numerico del solo workspace Smartsheet autorizzato.
 Opzionale:
 
 ```text
+SMARTSHEET_SHEET_ID
+```
+
+ID numerico del foglio da leggere. Se lo configuri, ha priorita rispetto al nome del foglio.
+
+Opzionale:
+
+```text
 SMARTSHEET_SHEET_NAME
 ```
 
@@ -73,3 +81,11 @@ Lettura del foglio `Knowledge Hub` dentro il workspace configurato:
 ```text
 https://TUO-SITO.vercel.app/api/smartsheet
 ```
+
+## Allegati
+
+L'API legge anche gli allegati associati alle righe Smartsheet usando `include=attachments`.
+
+Non servono variabili ambiente aggiuntive per gli allegati, ma il token deve avere permessi di lettura sul foglio.
+
+Nota: gli URL degli allegati Smartsheet possono essere temporanei o richiedere autenticazione Smartsheet.
