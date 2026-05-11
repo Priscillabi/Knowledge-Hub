@@ -676,7 +676,9 @@ select {
   border: 1px solid var(--border2);
   border-radius: 8px;
   padding: 5px 10px;
+  background: var(--surface);
   color: var(--text2);
+  cursor: pointer;
   font-size: 12px;
   font-weight: 500;
   text-decoration: none;
@@ -686,6 +688,11 @@ select {
   border-color: var(--accent);
   background: var(--accent);
   color: #ffffff;
+}
+
+.attachment-link:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .attachment-unavailable {

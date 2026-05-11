@@ -1,12 +1,12 @@
 const DEFAULT_BASE_URL = "https://api.smartsheet.com/2.0";
 const DEFAULT_SHEET_NAME = "Knowledge Hub";
 const TECHNICAL_COLUMN_GROUPS = {
-  Smartsheet: ["Smartsheet", "Smartsheet - tecnica", "Specifica Altro [Smartsheet]"],
-  "Power BI": ["Power BI", "Power BI - tecnica", "Specifica Altro [Power BI]"],
-  "Power Query": ["Power Query", "Power Query - tecnica", "Specifica Altro [Power Query]"],
-  Excel: ["Excel", "Excel - tecnica", "Specifica Altro [Excel]"],
-  "Virtus Flow": ["Virtus Flow", "Virtus Flow - tecnica", "Specifica Altro [Virtus Flow]"],
-  "Power Automate": ["Power Automate", "Power Automate - tecnica", "Specifica Altro [Power Automate]"],
+  Smartsheet: ["Smartsheet - tecnica"],
+  "Power BI": ["Power BI - tecnica"],
+  "Power Query": ["Power Query - tecnica"],
+  Excel: ["Excel - tecnica"],
+  "Virtus Flow": ["Virtus Flow - tecnica"],
+  "Power Automate": ["Power Automate - tecnica"],
 };
 
 function getConfig() {
@@ -107,7 +107,6 @@ function attachmentToResource(attachment) {
     attachmentSubType: attachment.attachmentSubType || "",
     mimeType: attachment.mimeType || "",
     sizeInKb: attachment.sizeInKb ?? null,
-    url: attachment.url || "",
     urlExpiresInMillis: attachment.urlExpiresInMillis ?? null,
   };
 }

@@ -86,6 +86,18 @@ https://TUO-SITO.vercel.app/api/smartsheet
 
 L'API legge anche gli allegati associati alle righe Smartsheet usando `include=attachments`.
 
-Non servono variabili ambiente aggiuntive per gli allegati, ma il token deve avere permessi di lettura sul foglio.
+Il frontend non riceve il token Smartsheet. Quando l'utente clicca `Apri allegato`, il sito chiama:
+
+```text
+/api/attachment?attachmentId=ID_ALLEGATO
+```
+
+Questo endpoint backend chiede a Smartsheet un URL temporaneo tramite:
+
+```text
+/sheets/{sheetId}/attachments/{attachmentId}
+```
+
+Non servono variabili ambiente aggiuntive per gli allegati, ma il token deve avere permessi di lettura sul foglio e sugli allegati.
 
 Nota: gli URL degli allegati Smartsheet possono essere temporanei o richiedere autenticazione Smartsheet.

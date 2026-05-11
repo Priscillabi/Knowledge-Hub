@@ -26,27 +26,27 @@ const TIPO_COLORS = {
 const FACET_CONFIG = [
   {
     sectionName: "Smartsheet",
-    columns: ["Smartsheet", "Smartsheet - tecnica", "Specifica Altro [Smartsheet]"],
+    columns: ["Smartsheet - tecnica"],
   },
   {
     sectionName: "Power BI",
-    columns: ["Power BI", "Power BI - tecnica", "Specifica Altro [Power BI]"],
+    columns: ["Power BI - tecnica"],
   },
   {
     sectionName: "Power Query",
-    columns: ["Power Query", "Power Query - tecnica", "Specifica Altro [Power Query]"],
+    columns: ["Power Query - tecnica"],
   },
   {
     sectionName: "Excel",
-    columns: ["Excel", "Excel - tecnica", "Specifica Altro [Excel]"],
+    columns: ["Excel - tecnica"],
   },
   {
     sectionName: "Virtus Flow",
-    columns: ["Virtus Flow", "Virtus Flow - tecnica", "Specifica Altro [Virtus Flow]"],
+    columns: ["Virtus Flow - tecnica"],
   },
   {
     sectionName: "Power Automate",
-    columns: ["Power Automate", "Power Automate - tecnica", "Specifica Altro [Power Automate]"],
+    columns: ["Power Automate - tecnica"],
   },
 ];
 
@@ -174,17 +174,20 @@ function itemHasSplitValue(item, key, value) {
   return splitValues(item[key]).includes(value);
 }
 
-function itemFacetValues(item, sectionName) {
+function itemFacetValues(item, sectionName, columns = []) {
   const section = item.technical?.[sectionName] || {};
   const values = new Set();
-  Object.values(section).forEach((value) => {
+  const sourceValues = columns.length ? columns.map((column) => section[column]) : Object.values(section);
+
+  sourceValues.forEach((value) => {
     splitValues(value).forEach((part) => values.add(part));
   });
   return values;
 }
 
 function itemHasFacetValue(item, sectionName, value) {
-  return itemFacetValues(item, sectionName).has(value);
+  const config = FACET_CONFIG.find((facet) => facet.sectionName === sectionName);
+  return itemFacetValues(item, sectionName, config?.columns || []).has(value);
 }
 
 function buildFilters() {
@@ -249,7 +252,7 @@ function buildFacetFilters(sectionName, columns) {
   const counts = new Map();
 
   db.forEach((item) => {
-    itemFacetValues(item, sectionName).forEach((value) => {
+    itemFacetValues(item, sectionName, columns).forEach((value) => {
       counts.set(value, (counts.get(value) || 0) + 1);
     });
   });
@@ -405,10 +408,17 @@ function render() {
     card.addEventListener("click", () => toggleCard(card.dataset.id));
   });
 
-  document.querySelectorAll("[data-copy-id]").forEach((button) => {
+    document.querySelectorAll("[data-copy-id]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       copyItem(button.dataset.copyId);
+    });
+  });
+
+  document.querySelectorAll("[data-open-attachment-id]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openAttachment(button);
     });
   });
 }
@@ -450,7 +460,7 @@ function cardTemplate(item, index) {
 
 function renderTechnicalDetails(item) {
   const chips = FACET_CONFIG.flatMap((config) =>
-    [...itemFacetValues(item, config.sectionName)].map((value) => ({
+    [...itemFacetValues(item, config.sectionName, config.columns)].map((value) => ({
       sectionName: config.sectionName,
       value,
     })),
@@ -477,7 +487,7 @@ function renderAttachments(attachments) {
     <div class="attachments-list">
       ${attachments.map(attachmentTemplate).join("")}
     </div>
-    <p class="attachment-note">I link Smartsheet possono richiedere autenticazione o scadere se sono URL temporanei.</p>`;
+    <p class="attachment-note">Il link viene richiesto a Smartsheet al momento dell'apertura e puo essere temporaneo.</p>`;
 }
 
 function attachmentTemplate(attachment) {
@@ -495,11 +505,35 @@ function attachmentTemplate(attachment) {
         </div>
       </div>
       ${
-        attachment.url
-          ? `<a class="attachment-link" href="${escAttr(attachment.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Apri allegato</a>`
-          : `<span class="attachment-unavailable">Link non disponibile</span>`
+        attachment.id
+          ? `<button class="attachment-link" type="button" data-open-attachment-id="${escAttr(attachment.id)}">Apri allegato</button>`
+          : `<span class="attachment-unavailable">Allegato presente, ma ID non disponibile.</span>`
       }
     </div>`;
+}
+
+async function openAttachment(button) {
+  const attachmentId = button.dataset.openAttachmentId;
+  const originalText = button.textContent;
+
+  button.disabled = true;
+  button.textContent = "Apro...";
+
+  try {
+    const response = await fetch(`/api/attachment?attachmentId=${encodeURIComponent(attachmentId)}`);
+    const data = await response.json();
+
+    if (!response.ok || !data.url) {
+      throw new Error(data.message || data.error || "URL allegato non disponibile.");
+    }
+
+    window.open(data.url, "_blank", "noopener,noreferrer");
+  } catch (error) {
+    showToast(error.message || "Impossibile aprire l'allegato");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
 }
 
 function fileExtension(name) {
