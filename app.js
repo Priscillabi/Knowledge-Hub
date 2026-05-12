@@ -40,6 +40,9 @@ const elements = {
   fileBadge: document.querySelector("#fileBadge"),
   reloadButton: document.querySelector("#reload-button"),
   exportButton: document.querySelector("#export-button"),
+  activeFilterBar: document.querySelector("#activeFilterBar"),
+  introPanel: document.querySelector("#introPanel"),
+  introClose: document.querySelector("#introClose"),
 };
 
 function toolColor(tool) {
@@ -158,6 +161,7 @@ async function loadKnowledgeHub() {
     elements.sidebarFooter.textContent = `${data.workspace?.name || "Workspace"} - ${data.sheet?.name || "Knowledge Hub"}`;
 
     buildFilters();
+    renderActiveFilters();
     updateStats();
     render();
     showToast(`${db.length} risorse caricate da Smartsheet`);
@@ -224,6 +228,7 @@ function buildFilters() {
     button.addEventListener("click", () => {
       activeTipo = button.dataset.tipo;
       buildFilters();
+      renderActiveFilters();
       render();
     });
   });
@@ -232,6 +237,7 @@ function buildFilters() {
     button.addEventListener("click", () => {
       activeTool = button.dataset.tool;
       buildFilters();
+      renderActiveFilters();
       render();
     });
   });
@@ -240,6 +246,7 @@ function buildFilters() {
     button.addEventListener("click", () => {
       toggleFacetSelection(button.dataset.facetSection, button.dataset.facetValue);
       buildFilters();
+      renderActiveFilters();
       render();
     });
   });
@@ -283,6 +290,28 @@ function buildFacetFilters(sectionName, columns) {
 
 function getSelectedFacetValues(sectionName) {
   return activeFacets[sectionName] || [];
+}
+
+function clearFilter(kind, sectionName = "", value = "") {
+  if (kind === "tipo") activeTipo = "all";
+  if (kind === "tool") activeTool = "all";
+  if (kind === "facet") toggleFacetSelection(sectionName, value);
+
+  buildFilters();
+  renderActiveFilters();
+  render();
+}
+
+function clearAllFilters() {
+  activeTipo = "all";
+  activeTool = "all";
+  activeFacets = {};
+  elements.searchInput.value = "";
+  searchTerm = "";
+  elements.searchClear.style.display = "none";
+  buildFilters();
+  renderActiveFilters();
+  render();
 }
 
 function toggleFacetSelection(sectionName, value) {
@@ -374,6 +403,75 @@ function updateStats() {
     <div class="stat-pill"><strong>${db.filter((item) => itemHasSplitValue(item, "tipo", "Best Practice")).length}</strong> best practice</div>
     <div class="stat-pill"><strong>${db.filter((item) => item.query).length}</strong> con formula/query</div>
     <div class="stat-pill"><strong>${tools}</strong> strumenti</div>`;
+}
+
+function activeFilterChips() {
+  const chips = [];
+
+  if (activeTipo !== "all") {
+    chips.push({ label: `Tipologia: ${activeTipo}`, kind: "tipo" });
+  }
+
+  if (activeTool !== "all") {
+    chips.push({ label: `Strumento: ${activeTool}`, kind: "tool" });
+  }
+
+  Object.entries(activeFacets).forEach(([sectionName, values]) => {
+    values.forEach((value) => {
+      chips.push({
+        label: `${sectionName}: ${value}`,
+        kind: "facet",
+        sectionName,
+        value,
+      });
+    });
+  });
+
+  if (searchTerm) {
+    chips.push({ label: `Ricerca: ${searchTerm}`, kind: "search" });
+  }
+
+  return chips;
+}
+
+function renderActiveFilters() {
+  const chips = activeFilterChips();
+
+  if (!chips.length) {
+    elements.activeFilterBar.innerHTML = "";
+    elements.activeFilterBar.classList.remove("show");
+    return;
+  }
+
+  elements.activeFilterBar.classList.add("show");
+  elements.activeFilterBar.innerHTML = `
+    <div class="active-filter-label">Filtri attivi</div>
+    <div class="active-filter-chips">
+      ${chips.map(activeFilterChipTemplate).join("")}
+      <button class="active-filter-reset" type="button" data-clear-all>Reset</button>
+    </div>`;
+
+  elements.activeFilterBar.querySelectorAll("[data-clear-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const kind = button.dataset.kind;
+      if (kind === "search") {
+        elements.searchInput.value = "";
+        onSearch("");
+        return;
+      }
+      clearFilter(kind, button.dataset.sectionName || "", button.dataset.value || "");
+    });
+  });
+
+  elements.activeFilterBar.querySelector("[data-clear-all]").addEventListener("click", clearAllFilters);
+}
+
+function activeFilterChipTemplate(chip) {
+  return `
+    <button class="active-filter-chip" type="button" data-clear-filter data-kind="${escAttr(chip.kind)}" data-section-name="${escAttr(chip.sectionName || "")}" data-value="${escAttr(chip.value || "")}">
+      ${escHtml(chip.label)}
+      <span>x</span>
+    </button>`;
 }
 
 function render() {
@@ -569,6 +667,7 @@ function renderError(message) {
 function onSearch(value) {
   searchTerm = value;
   elements.searchClear.style.display = value ? "flex" : "none";
+  renderActiveFilters();
   render();
 }
 
@@ -628,5 +727,13 @@ elements.searchInput.addEventListener("input", () => onSearch(elements.searchInp
 elements.searchClear.addEventListener("click", clearSearch);
 elements.reloadButton.addEventListener("click", loadKnowledgeHub);
 elements.exportButton.addEventListener("click", exportData);
+elements.introClose.addEventListener("click", () => {
+  elements.introPanel.classList.add("collapsed");
+});
+document.querySelectorAll("[data-filter-toggle]").forEach((button) => {
+  button.addEventListener("click", () => {
+    button.closest(".filter-section").classList.toggle("open");
+  });
+});
 
 loadKnowledgeHub();

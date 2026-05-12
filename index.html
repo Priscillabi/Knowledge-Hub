@@ -13,20 +13,39 @@
     <div class="layout">
       <aside class="sidebar">
         <div class="sidebar-logo">
-          <div class="mark">KB</div>
-          <h1>Knowledge Base</h1>
-          <p>Risorse tecniche aziendali</p>
+          <div class="brand-lockup">
+            <div class="logo-placeholder">KP</div>
+            <div>
+              <p class="brand-kicker">Key Partner</p>
+              <h1>Knowledge Hub</h1>
+            </div>
+          </div>
+          <p>Innovation Clinic Know-How Center</p>
         </div>
         <nav class="sidebar-nav">
-          <div class="nav-label">Vista</div>
-          <button class="nav-item active" id="nav-all" type="button" data-view="all"><span class="icon">*</span> Tutte le risorse</button>
-          <div class="nav-sep"></div>
-          <div class="nav-label">Tipologia</div>
-          <div id="tipo-filters"></div>
-          <div class="nav-sep"></div>
-          <div class="nav-label">Strumento</div>
-          <div id="tool-filters"></div>
-          <div class="nav-sep"></div>
+          <div class="filter-section open">
+            <button class="filter-section-toggle" type="button" data-filter-toggle="overview">
+              <span>Vista</span>
+              <span class="filter-chevron">v</span>
+            </button>
+            <div class="filter-section-body" data-filter-body="overview">
+              <button class="nav-item active" id="nav-all" type="button"><span class="icon">*</span> Tutte le risorse</button>
+            </div>
+          </div>
+          <div class="filter-section open">
+            <button class="filter-section-toggle" type="button" data-filter-toggle="tipo">
+              <span>Tipologia</span>
+              <span class="filter-chevron">v</span>
+            </button>
+            <div class="filter-section-body" id="tipo-filters" data-filter-body="tipo"></div>
+          </div>
+          <div class="filter-section open">
+            <button class="filter-section-toggle" type="button" data-filter-toggle="tool">
+              <span>Strumento</span>
+              <span class="filter-chevron">v</span>
+            </button>
+            <div class="filter-section-body" id="tool-filters" data-filter-body="tool"></div>
+          </div>
           <div id="facet-filters"></div>
           <button class="nav-item" id="reload-button" type="button"><span class="icon">R</span> Aggiorna Smartsheet</button>
         </nav>
@@ -35,6 +54,10 @@
 
       <div class="main">
         <header class="topbar">
+          <div class="topbar-title">
+            <span class="section-dot"></span>
+            <span>Knowledge Base Aziendale</span>
+          </div>
           <div class="search-wrap">
             <span class="search-icon">Cerca</span>
             <input type="text" id="searchInput" placeholder="Cerca in tutta la knowledge base..." />
@@ -46,9 +69,27 @@
           </div>
         </header>
 
+        <section class="intro-panel" id="introPanel">
+          <div class="intro-copy">
+            <p class="intro-kicker">Innovation Clinic</p>
+            <h2>Know-how operativo, pronto da riusare.</h2>
+            <p>
+              Il Knowledge Hub raccoglie best practice, workaround, formule, query e materiali tecnici validati,
+              connessi direttamente al foglio Smartsheet di riferimento.
+            </p>
+          </div>
+          <div class="intro-steps" aria-label="Guida rapida">
+            <div><strong>1</strong><span>Cerca per parola chiave</span></div>
+            <div><strong>2</strong><span>Filtra per strumento o tecnica</span></div>
+            <div><strong>3</strong><span>Apri dettagli e allegati</span></div>
+          </div>
+          <button class="intro-close" id="introClose" type="button">Nascondi guida</button>
+        </section>
+
         <div class="stats-bar" id="statsBar"></div>
 
         <main class="content">
+          <div class="active-filter-bar" id="activeFilterBar"></div>
           <div id="mainArea"></div>
         </main>
       </div>
