@@ -6,17 +6,17 @@ let searchTerm = "";
 
 const TOOL_COLORS = {
   Smartsheet: "#0F6E56",
-  "Power BI": "#185FA5",
+  "Power BI": "#2A327C",
   Excel: "#1A5C38",
   "Power Query": "#5B4FD4",
   "Virtus Flow": "#854F0B",
-  "Power Automate": "#791F1F",
+  "Power Automate": "#F13557",
 };
 
 const TIPO_COLORS = {
   "Best Practice": "#0F6E56",
-  "Issue - Workaround": "#854F0B",
-  Template: "#185FA5",
+  "Issue - Workaround": "#F13557",
+  Template: "#2A327C",
 };
 
 const FACET_CONFIG = [
@@ -399,11 +399,27 @@ function searchableValues(item) {
 
 function updateStats() {
   const tools = new Set(db.flatMap((item) => splitValues(item.strumento))).size;
+  const countByTipo = (tipo) => db.filter((item) => itemHasSplitValue(item, "tipo", tipo)).length;
+
   elements.statsBar.innerHTML = `
-    <div class="stat-pill"><strong>${db.length}</strong> risorse totali</div>
-    <div class="stat-pill"><strong>${db.filter((item) => itemHasSplitValue(item, "tipo", "Best Practice")).length}</strong> best practice</div>
-    <div class="stat-pill"><strong>${db.filter((item) => item.query).length}</strong> con formula/query</div>
-    <div class="stat-pill"><strong>${tools}</strong> strumenti</div>`;
+    <section class="stats-total" aria-label="Totale informazioni inserite">
+      <div class="stat-main">
+        <span class="stat-label">Totale informazioni inserite</span>
+        <strong>${db.length}</strong>
+      </div>
+      <div class="stat-breakdown">
+        <span class="stat-breakdown-label">di cui per tipologia</span>
+        <div class="stat-breakdown-items">
+          <div class="stat-chip"><strong>${countByTipo("Best Practice")}</strong><span>Best Practice</span></div>
+          <div class="stat-chip"><strong>${countByTipo("Elemento tecnico")}</strong><span>Elemento tecnico</span></div>
+          <div class="stat-chip"><strong>${countByTipo("Issue - Workaround")}</strong><span>Issue - Workaround</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="stats-tools" aria-label="Totale strumenti">
+      <span class="stat-label">Totale strumenti</span>
+      <strong>${tools}</strong>
+    </section>`;
 }
 
 function activeFilterChips() {
