@@ -43,6 +43,7 @@ const elements = {
   activeFilterBar: document.querySelector("#activeFilterBar"),
   introPanel: document.querySelector("#introPanel"),
   introClose: document.querySelector("#introClose"),
+  introReopen: document.querySelector("#introReopen"),
 };
 
 function toolColor(tool) {
@@ -729,6 +730,11 @@ elements.reloadButton.addEventListener("click", loadKnowledgeHub);
 elements.exportButton.addEventListener("click", exportData);
 elements.introClose.addEventListener("click", () => {
   elements.introPanel.classList.add("collapsed");
+  elements.introReopen.classList.add("show");
+});
+elements.introReopen.addEventListener("click", () => {
+  elements.introPanel.classList.remove("collapsed");
+  elements.introReopen.classList.remove("show");
 });
 document.querySelectorAll("[data-filter-toggle]").forEach((button) => {
   button.addEventListener("click", () => {
