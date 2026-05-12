@@ -14,7 +14,7 @@
       <aside class="sidebar">
         <div class="sidebar-logo">
           <div class="brand-lockup">
-            <div class="logo-placeholder">KP</div>
+            <div class="logo-placeholder" aria-label="Key Partner logo placeholder">KP</div>
             <div>
               <p class="brand-kicker">Key Partner</p>
               <h1>Knowledge Hub</h1>
@@ -26,7 +26,7 @@
           <div class="filter-section open">
             <button class="filter-section-toggle" type="button" data-filter-toggle="overview">
               <span>Vista</span>
-              <span class="filter-chevron">v</span>
+              <span class="filter-chevron" aria-hidden="true"></span>
             </button>
             <div class="filter-section-body" data-filter-body="overview">
               <button class="nav-item active" id="nav-all" type="button"><span class="icon">*</span> Tutte le risorse</button>
@@ -35,14 +35,14 @@
           <div class="filter-section open">
             <button class="filter-section-toggle" type="button" data-filter-toggle="tipo">
               <span>Tipologia</span>
-              <span class="filter-chevron">v</span>
+              <span class="filter-chevron" aria-hidden="true"></span>
             </button>
             <div class="filter-section-body" id="tipo-filters" data-filter-body="tipo"></div>
           </div>
           <div class="filter-section open">
             <button class="filter-section-toggle" type="button" data-filter-toggle="tool">
               <span>Strumento</span>
-              <span class="filter-chevron">v</span>
+              <span class="filter-chevron" aria-hidden="true"></span>
             </button>
             <div class="filter-section-body" id="tool-filters" data-filter-body="tool"></div>
           </div>
@@ -56,7 +56,7 @@
         <header class="topbar">
           <div class="topbar-title">
             <span class="section-dot"></span>
-            <span>Knowledge Base Aziendale</span>
+            <span>Innovation Clinic</span>
           </div>
           <div class="search-wrap">
             <span class="search-icon">Cerca</span>
@@ -70,12 +70,16 @@
         </header>
 
         <section class="intro-panel" id="introPanel">
+          <div class="intro-visual" aria-hidden="true">
+            <span></span>
+            <strong>KP</strong>
+          </div>
           <div class="intro-copy">
-            <p class="intro-kicker">Innovation Clinic</p>
-            <h2>Know-how operativo, pronto da riusare.</h2>
+            <p class="intro-kicker">Innovation Clinic / Know-How Center</p>
+            <h2>Know-How Center</h2>
             <p>
-              Il Knowledge Hub raccoglie best practice, workaround, formule, query e materiali tecnici validati,
-              connessi direttamente al foglio Smartsheet di riferimento.
+              Il Knowledge Hub organizza best practice, workaround, formule, query e materiali tecnici in un ambiente
+              consultabile, filtrabile e collegato alla fonte Smartsheet ufficiale.
             </p>
           </div>
           <div class="intro-steps" aria-label="Guida rapida">
@@ -85,6 +89,10 @@
           </div>
           <button class="intro-close" id="introClose" type="button">Nascondi guida</button>
         </section>
+        <button class="intro-reopen" id="introReopen" type="button">
+          <span>?</span>
+          Mostra guida
+        </button>
 
         <div class="stats-bar" id="statsBar"></div>
 
