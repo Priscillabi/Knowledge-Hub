@@ -3,6 +3,7 @@ let activeTipo = "all";
 let activeTool = "all";
 let activeFacets = {};
 let searchTerm = "";
+let technicalFiltersUnlocked = false;
 
 const TOOL_COLORS = {
   Smartsheet: "#0F6E56",
@@ -155,6 +156,7 @@ async function loadKnowledgeHub() {
     activeTipo = "all";
     activeTool = "all";
     activeFacets = {};
+    technicalFiltersUnlocked = false;
     searchTerm = "";
     elements.searchInput.value = "";
     elements.searchClear.style.display = "none";
@@ -168,6 +170,7 @@ async function loadKnowledgeHub() {
     showToast(`${db.length} risorse caricate da Smartsheet`);
   } catch (error) {
     db = [];
+    technicalFiltersUnlocked = false;
     buildFilters();
     updateStats();
     renderError(error.message);
@@ -237,6 +240,8 @@ function buildFilters() {
   document.querySelectorAll("[data-tool]").forEach((button) => {
     button.addEventListener("click", () => {
       activeTool = button.dataset.tool;
+      technicalFiltersUnlocked = true;
+      pruneHiddenFacetSelections();
       buildFilters();
       renderActiveFilters();
       render();
@@ -254,9 +259,31 @@ function buildFilters() {
 }
 
 function buildFacetSections() {
-  return FACET_CONFIG.map((config) => buildFacetFilters(config.sectionName, config.columns))
+  if (!technicalFiltersUnlocked) return "";
+
+  return visibleFacetConfigs()
+    .map((config) => buildFacetFilters(config.sectionName, config.columns))
     .filter(Boolean)
     .join("");
+}
+
+function visibleFacetConfigs() {
+  if (activeTool === "all") return FACET_CONFIG;
+
+  return FACET_CONFIG.filter((config) => toolMatchesFacetSection(activeTool, config.sectionName));
+}
+
+function toolMatchesFacetSection(tool, sectionName) {
+  const normalizedTool = String(tool || "").toLowerCase();
+  const normalizedSection = String(sectionName || "").toLowerCase();
+  return normalizedTool.includes(normalizedSection) || normalizedSection.includes(normalizedTool);
+}
+
+function pruneHiddenFacetSelections() {
+  if (activeTool === "all") return;
+
+  const visibleSections = new Set(visibleFacetConfigs().map((config) => config.sectionName));
+  activeFacets = Object.fromEntries(Object.entries(activeFacets).filter(([sectionName]) => visibleSections.has(sectionName)));
 }
 
 function buildFacetFilters(sectionName, columns) {
@@ -295,7 +322,11 @@ function getSelectedFacetValues(sectionName) {
 
 function clearFilter(kind, sectionName = "", value = "") {
   if (kind === "tipo") activeTipo = "all";
-  if (kind === "tool") activeTool = "all";
+  if (kind === "tool") {
+    activeTool = "all";
+    activeFacets = {};
+    technicalFiltersUnlocked = false;
+  }
   if (kind === "facet") toggleFacetSelection(sectionName, value);
 
   buildFilters();
@@ -307,6 +338,7 @@ function clearAllFilters() {
   activeTipo = "all";
   activeTool = "all";
   activeFacets = {};
+  technicalFiltersUnlocked = false;
   elements.searchInput.value = "";
   searchTerm = "";
   elements.searchClear.style.display = "none";
