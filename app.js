@@ -29,6 +29,39 @@ const FACET_CONFIG = [
   { sectionName: "Power Automate", columns: ["Power Automate - tecnica"] },
 ];
 
+const TOOL_COLUMN_CONFIG = {
+  Smartsheet: {
+    markerColumn: "Smartsheet",
+    technicalColumn: "Smartsheet - tecnica",
+    altroColumn: "Specifica Altro [Smartsheet]",
+  },
+  "Power BI": {
+    markerColumn: "Power BI",
+    technicalColumn: "Power BI - tecnica",
+    altroColumn: "Specifica Altro [Power BI]",
+  },
+  "Power Query": {
+    markerColumn: "Power Query",
+    technicalColumn: "Power Query - tecnica",
+    altroColumn: "Specifica Altro [Power Query]",
+  },
+  Excel: {
+    markerColumn: "Excel",
+    technicalColumn: "Excel - tecnica",
+    altroColumn: "Specifica Altro [Excel]",
+  },
+  "Virtus Flow": {
+    markerColumn: "Virtus Flow",
+    technicalColumn: "Virtus Flow - tecnica",
+    altroColumn: "Specifica Altro [Virtus Flow]",
+  },
+  "Power Automate": {
+    markerColumn: "Power Automate",
+    technicalColumn: "Power Automate - tecnica",
+    altroColumn: "Specifica Altro [Power Automate]",
+  },
+};
+
 const elements = {
   tipoFilters: document.querySelector("#tipo-filters"),
   toolFilters: document.querySelector("#tool-filters"),
@@ -45,6 +78,13 @@ const elements = {
   introPanel: document.querySelector("#introPanel"),
   introClose: document.querySelector("#introClose"),
   introReopen: document.querySelector("#introReopen"),
+  newEntryButton: document.querySelector("#new-entry-button"),
+  entryModal: document.querySelector("#entryModal"),
+  entryModalClose: document.querySelector("#entryModalClose"),
+  entryForm: document.querySelector("#entryForm"),
+  entryCancel: document.querySelector("#entryCancel"),
+  entrySubmit: document.querySelector("#entrySubmit"),
+  entryFormFeedback: document.querySelector("#entryFormFeedback"),
 };
 
 function toolColor(tool) {
@@ -753,6 +793,110 @@ function showToast(message) {
   window.setTimeout(() => toast.classList.remove("show"), 2800);
 }
 
+function openEntryModal() {
+  elements.entryForm.reset();
+  elements.entryFormFeedback.textContent = "";
+  elements.entryFormFeedback.className = "form-feedback";
+  syncEntryFormConditionals();
+  elements.entryModal.classList.add("show");
+  elements.entryModal.setAttribute("aria-hidden", "false");
+  elements.entryForm.elements.title.focus();
+}
+
+function closeEntryModal() {
+  elements.entryModal.classList.remove("show");
+  elements.entryModal.setAttribute("aria-hidden", "true");
+}
+
+function syncEntryFormConditionals() {
+  const tipo = elements.entryForm.elements.tipo.value;
+  const strumento = elements.entryForm.elements.strumento.value;
+  const showWorkaround = tipo === "Issue - Workaround";
+  const showQuery = tipo === "Elemento tecnico" || ["Power BI", "Power Query", "Excel", "Power Automate"].includes(strumento);
+
+  setConditionalVisibility("workaround", showWorkaround);
+  setConditionalVisibility("query", showQuery);
+}
+
+function setConditionalVisibility(name, visible) {
+  const field = elements.entryForm.querySelector(`[data-conditional="${name}"]`);
+  if (!field) return;
+  field.classList.toggle("is-hidden", !visible);
+}
+
+function entryPayloadFromForm() {
+  const formData = new FormData(elements.entryForm);
+  const payload = Object.fromEntries(formData.entries());
+
+  Object.keys(payload).forEach((key) => {
+    payload[key] = String(payload[key] || "").trim();
+  });
+
+  return payload;
+}
+
+function validateEntryPayload(payload) {
+  const missing = [];
+  if (!payload.title) missing.push("Titolo Iniziativa");
+  if (!payload.tipo) missing.push("Tipologia di contenuto");
+  if (!payload.strumento) missing.push("Strumento");
+  if (!payload.desc) missing.push("Descrizione");
+
+  if (missing.length) {
+    return `Compila i campi obbligatori: ${missing.join(", ")}.`;
+  }
+
+  if (payload.autore && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.autore)) {
+    return "Inserisci un indirizzo email valido nel campo Inserita da.";
+  }
+
+  return "";
+}
+
+function setEntryFormFeedback(message, state = "") {
+  elements.entryFormFeedback.textContent = message;
+  elements.entryFormFeedback.className = `form-feedback ${state}`.trim();
+}
+
+async function submitEntryForm(event) {
+  event.preventDefault();
+
+  const payload = entryPayloadFromForm();
+  const validationMessage = validateEntryPayload(payload);
+
+  if (validationMessage) {
+    setEntryFormFeedback(validationMessage, "error");
+    return;
+  }
+
+  elements.entrySubmit.disabled = true;
+  elements.entrySubmit.textContent = "Salvataggio...";
+  setEntryFormFeedback("Invio della nuova informazione a Smartsheet...", "info");
+
+  try {
+    const response = await fetch("/api/smartsheet-create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || data.error || `Errore ${response.status}`);
+    }
+
+    setEntryFormFeedback("Informazione inserita correttamente.", "success");
+    showToast("Nuova informazione salvata in Smartsheet");
+    await loadKnowledgeHub();
+    closeEntryModal();
+  } catch (error) {
+    setEntryFormFeedback(error.message || "Impossibile salvare la nuova informazione.", "error");
+  } finally {
+    elements.entrySubmit.disabled = false;
+    elements.entrySubmit.textContent = "Salva in Smartsheet";
+  }
+}
+
 function highlight(text, term) {
   if (!term || !text) return escHtml(text || "");
 
@@ -776,6 +920,18 @@ elements.searchInput.addEventListener("input", () => onSearch(elements.searchInp
 elements.searchClear.addEventListener("click", clearSearch);
 elements.reloadButton.addEventListener("click", loadKnowledgeHub);
 elements.exportButton.addEventListener("click", exportData);
+elements.newEntryButton.addEventListener("click", openEntryModal);
+elements.entryModalClose.addEventListener("click", closeEntryModal);
+elements.entryCancel.addEventListener("click", closeEntryModal);
+elements.entryForm.addEventListener("submit", submitEntryForm);
+elements.entryForm.elements.tipo.addEventListener("change", syncEntryFormConditionals);
+elements.entryForm.elements.strumento.addEventListener("change", syncEntryFormConditionals);
+elements.entryModal.addEventListener("click", (event) => {
+  if (event.target === elements.entryModal) closeEntryModal();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && elements.entryModal.classList.contains("show")) closeEntryModal();
+});
 elements.introClose.addEventListener("click", () => {
   elements.introPanel.classList.add("collapsed");
   elements.introReopen.classList.add("show");
