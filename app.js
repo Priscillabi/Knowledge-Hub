@@ -1117,6 +1117,7 @@ function renderToolField() {
             <input type="checkbox" name="tools" value="${escAttr(tool)}" ${entryState.tools.includes(tool) ? "checked" : ""}>
             <span>${escHtml(tool)}</span>
           </label>`).join("")}
+        ${CENSIMENTO_TOOLS.length % 2 ? '<div class="tool-grid-placeholder" aria-hidden="true"></div>' : ""}
         </div>
       </div>
     </div>`;

@@ -1410,6 +1410,7 @@ textarea {
 .tool-options-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 48px;
 }
 
 .tool-options-grid .checkbox-row:nth-last-child(2) {
@@ -1418,6 +1419,17 @@ textarea {
 
 .tool-options-grid .checkbox-row:nth-child(odd) {
   border-right: 1px solid rgba(219, 225, 234, 0.78);
+}
+
+.tool-options-grid .checkbox-row {
+  height: 48px;
+}
+
+.tool-grid-placeholder {
+  height: 48px;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
 }
 
 .checkbox-row {
@@ -1670,6 +1682,10 @@ textarea {
 
   .tool-options-grid .checkbox-row:nth-last-child(2) {
     border-bottom: 1px solid rgba(219, 225, 234, 0.78);
+  }
+
+  .tool-grid-placeholder {
+    display: none;
   }
 
   .field.span-2 {
