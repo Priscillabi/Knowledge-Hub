@@ -1,4 +1,4 @@
-const { json, smartsheetFetch } = require("./_smartsheet");
+const { getSheetId, json, smartsheetFetch } = require("./_smartsheet");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "GET") {
@@ -11,7 +11,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const attachment = await smartsheetFetch(`/attachments/${encodeURIComponent(attachmentId)}`);
+    const attachment = await smartsheetFetch(`/sheets/${getSheetId()}/attachments/${encodeURIComponent(attachmentId)}`);
     const mode = String(req.query.mode || "metadata").trim();
 
     if (mode === "preview" || mode === "download") {
