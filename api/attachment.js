@@ -12,6 +12,12 @@ module.exports = async function handler(req, res) {
 
   try {
     const attachment = await smartsheetFetch(`/attachments/${encodeURIComponent(attachmentId)}`);
+    const mode = String(req.query.mode || "metadata").trim();
+
+    if (mode === "preview" || mode === "download") {
+      return streamAttachment(res, attachment, mode);
+    }
+
     return json(res, 200, {
       id: String(attachment.id || attachmentId),
       name: attachment.name || "",
@@ -26,3 +32,35 @@ module.exports = async function handler(req, res) {
     });
   }
 };
+
+async function streamAttachment(res, attachment, mode) {
+  if (!attachment.url) {
+    return json(res, 404, {
+      error: "ATTACHMENT_URL_UNAVAILABLE",
+      message: "URL allegato non disponibile.",
+    });
+  }
+
+  const response = await fetch(attachment.url);
+  if (!response.ok) {
+    return json(res, response.status, {
+      error: "ATTACHMENT_FETCH_FAILED",
+      message: "Impossibile recuperare il file da Smartsheet.",
+    });
+  }
+
+  const filename = safeFilename(attachment.name || "allegato");
+  const contentType = attachment.mimeType || response.headers.get("content-type") || "application/octet-stream";
+  const disposition = mode === "download" ? "attachment" : "inline";
+  const bytes = Buffer.from(await response.arrayBuffer());
+
+  res.statusCode = 200;
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Length", String(bytes.length));
+  res.setHeader("Content-Disposition", `${disposition}; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+  res.end(bytes);
+}
+
+function safeFilename(name) {
+  return String(name || "allegato").replace(/[\r\n"]/g, "").trim() || "allegato";
+}

@@ -1098,6 +1098,20 @@ textarea {
   white-space: nowrap;
 }
 
+.attachment-name-button {
+  max-width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.attachment-name-button:hover {
+  color: var(--coral-dark);
+  text-decoration: underline;
+}
+
 .attachment-meta,
 .attachment-note {
   color: var(--soft);
@@ -1115,6 +1129,12 @@ textarea {
   font-size: 12px;
   font-weight: 700;
   text-decoration: none;
+}
+
+.attachment-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 7px;
 }
 
 .attachment-link:hover {

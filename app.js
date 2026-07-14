@@ -806,10 +806,17 @@ function render() {
     });
   });
 
-  document.querySelectorAll("[data-open-attachment-id]").forEach((button) => {
+  document.querySelectorAll("[data-preview-attachment-id]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
-      openAttachment(button);
+      previewAttachment(button);
+    });
+  });
+
+  document.querySelectorAll("[data-download-attachment-id]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      downloadAttachment(button);
     });
   });
 }
@@ -884,13 +891,20 @@ function attachmentTemplate(attachment) {
       <div class="attachment-main">
         <span class="attachment-icon">file</span>
         <div>
-          <div class="attachment-name">${escHtml(attachment.name || "Allegato")}</div>
+          ${
+            attachment.id
+              ? `<button class="attachment-name attachment-name-button" type="button" data-preview-attachment-id="${escAttr(attachment.id)}">${escHtml(attachment.name || "Allegato")}</button>`
+              : `<div class="attachment-name">${escHtml(attachment.name || "Allegato")}</div>`
+          }
           ${meta ? `<div class="attachment-meta">${escHtml(meta)}</div>` : ""}
         </div>
       </div>
       ${
         attachment.id
-          ? `<button class="attachment-link" type="button" data-open-attachment-id="${escAttr(attachment.id)}">Apri allegato</button>`
+          ? `<div class="attachment-actions">
+              <button class="attachment-link" type="button" data-preview-attachment-id="${escAttr(attachment.id)}">Anteprima</button>
+              <button class="attachment-link" type="button" data-download-attachment-id="${escAttr(attachment.id)}">Scarica</button>
+            </div>`
           : `<span class="attachment-unavailable">Allegato presente, ma ID non disponibile.</span>`
       }
     </div>`;
@@ -901,24 +915,28 @@ function fileExtension(name) {
   return match ? match[1].toUpperCase() : "";
 }
 
-async function openAttachment(button) {
-  const attachmentId = button.dataset.openAttachmentId;
+function previewAttachment(button) {
+  const attachmentId = button.dataset.previewAttachmentId;
+  if (!attachmentId) return;
+  window.open(`/api/attachment?attachmentId=${encodeURIComponent(attachmentId)}&mode=preview`, "_blank", "noopener,noreferrer");
+}
+
+async function downloadAttachment(button) {
+  const attachmentId = button.dataset.downloadAttachmentId;
   const originalText = button.textContent;
 
   button.disabled = true;
-  button.textContent = "Apro...";
+  button.textContent = "Scarico...";
 
   try {
-    const response = await fetch(`/api/attachment?attachmentId=${encodeURIComponent(attachmentId)}`);
-    const data = await response.json();
-
-    if (!response.ok || !data.url) {
-      throw new Error(data.message || data.error || "URL allegato non disponibile.");
-    }
-
-    window.open(data.url, "_blank", "noopener,noreferrer");
+    const link = document.createElement("a");
+    link.href = `/api/attachment?attachmentId=${encodeURIComponent(attachmentId)}&mode=download`;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   } catch (error) {
-    showToast(error.message || "Impossibile aprire l'allegato");
+    showToast(error.message || "Impossibile scaricare l'allegato");
   } finally {
     button.disabled = false;
     button.textContent = originalText;
