@@ -138,6 +138,11 @@ function addCell(cells, columns, title, value) {
   if (value === undefined || value === null || value === "") return;
   const column = columns.get(title);
   if (!column) return;
+
+  if (column.systemColumnType || column.autoNumberFormat) {
+    return;
+  }
+
   let normalizedValue = value;
 
   if (column.type === "CHECKBOX") {
