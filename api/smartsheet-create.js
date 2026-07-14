@@ -105,7 +105,6 @@ module.exports = async function handler(req, res) {
     const sheet = await smartsheetFetch(`/sheets/${getSheetId()}`);
     const columns = columnMap(sheet);
     const { columnName: titleColumnName, warning } = requireTitleColumn(columns);
-    const toolConfig = selectedToolConfig(payload.strumento);
     const cells = [];
 
     addCell(cells, columns, titleColumnName, payload.title);
@@ -114,12 +113,6 @@ module.exports = async function handler(req, res) {
     addCell(cells, columns, "Descrizione", payload.desc);
     addCell(cells, columns, "Workaround", payload.workaround);
     addCell(cells, columns, "Inserire Formula o Query", payload.query);
-    addCell(cells, columns, "TAG", payload.tag);
-    addCell(cells, columns, "TAG - Ricerca", payload.tagRicerca);
-    addCell(cells, columns, "Inserita da", payload.autore);
-    addCell(cells, columns, "Data Inserimento", new Date().toISOString());
-    addCell(cells, columns, "TAG - Tipologia di contenuto", payload.tipo);
-    addCell(cells, columns, "TAG - Strumento", payload.strumenti.join(", "));
 
     payload.normalizedStrumenti.forEach((tool) => {
       const config = selectedToolConfig(tool);
@@ -128,10 +121,8 @@ module.exports = async function handler(req, res) {
       const functionalityValues = Array.isArray(payload.functionalities[tool]) ? payload.functionalities[tool] : [];
       const otherDetail = String(payload.otherDetails[tool] || "").trim();
 
-      addCell(cells, columns, config.markerColumn, "Si");
       addCell(cells, columns, config.technicalColumn, functionalityValues.join(", "));
       addCell(cells, columns, config.altroColumn, otherDetail);
-      addCell(cells, columns, config.listColumn, functionalityValues.join(", "));
     });
 
     const result = await smartsheetFetch(`/sheets/${getSheetId()}/rows`, {

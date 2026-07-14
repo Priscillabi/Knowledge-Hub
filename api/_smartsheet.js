@@ -139,7 +139,7 @@ function addCell(cells, columns, title, value) {
   const column = columns.get(title);
   if (!column) return;
 
-  if (column.systemColumnType || column.autoNumberFormat) {
+  if (column.systemColumnType || column.autoNumberFormat || column.formula) {
     return;
   }
 
