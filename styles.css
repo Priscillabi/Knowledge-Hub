@@ -1360,6 +1360,11 @@ textarea {
   font-weight: 900;
 }
 
+.field .required-mark {
+  color: var(--coral);
+  font-weight: 900;
+}
+
 .field input,
 .field select,
 .field textarea {
@@ -1428,14 +1433,22 @@ textarea {
 .checkbox-row input {
   position: relative;
   width: 24px;
+  min-width: 24px;
+  max-width: 24px;
   height: 24px;
+  min-height: 24px;
+  max-height: 24px;
   flex: 0 0 24px;
+  align-self: center;
   margin: 0;
+  padding: 0;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
   appearance: none;
+  -webkit-appearance: none;
   background: #fff;
   accent-color: var(--coral);
+  box-sizing: border-box;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
