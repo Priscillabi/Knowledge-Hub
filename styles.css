@@ -45,7 +45,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -454,6 +456,13 @@ input {
   cursor: wait;
   opacity: 0.68;
   transform: none;
+}
+
+.btn:focus-visible,
+.modal-close:focus-visible,
+.file-upload-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(241, 53, 87, 0.16);
 }
 
 .file-badge {
@@ -1315,7 +1324,8 @@ input {
 
 .form-subsection h3 {
   color: var(--navy);
-  font-size: 16px;
+  font-size: 17px;
+  font-weight: 800;
   line-height: 1.25;
 }
 
@@ -1339,9 +1349,10 @@ input {
 }
 
 .field span {
-  color: var(--muted);
-  font-size: 12px;
+  color: var(--ink);
+  font-size: 13px;
   font-weight: 800;
+  line-height: 1.35;
 }
 
 .recommended-field > span em {
@@ -1362,7 +1373,7 @@ input {
 .field textarea {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--surface2);
   color: var(--ink);
   outline: none;
@@ -1383,36 +1394,93 @@ input {
 }
 
 .checkbox-list {
-  display: grid;
-  gap: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   max-height: 280px;
   overflow-y: auto;
-  padding: 10px;
+  padding: 0;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--surface2);
 }
 
 .checkbox-row {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: 8px;
-  align-items: start;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(219, 225, 234, 0.78);
   color: var(--muted);
+  cursor: pointer;
   font-size: 13px;
   line-height: 1.45;
+  transition: background 0.15s, color 0.15s;
+}
+
+.checkbox-row:last-child {
+  border-bottom: 0;
+}
+
+.checkbox-row:hover {
+  background: #fff;
+  color: var(--ink);
 }
 
 .checkbox-row input {
-  width: 15px;
-  height: 15px;
-  margin-top: 2px;
+  position: relative;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  appearance: none;
+  background: #fff;
   accent-color: var(--coral);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.checkbox-row input::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  opacity: 0;
+  transform: rotate(45deg) scale(0.8);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.checkbox-row input:hover {
+  border-color: var(--coral);
+}
+
+.checkbox-row input:checked {
+  border-color: var(--coral);
+  background: var(--coral);
+}
+
+.checkbox-row input:checked::after {
+  opacity: 1;
+  transform: rotate(45deg) scale(1);
+}
+
+.checkbox-row input:focus-visible {
+  box-shadow: 0 0 0 3px rgba(241, 53, 87, 0.16);
+}
+
+.checkbox-row input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .select-all-row {
-  padding-bottom: 7px;
-  border-bottom: 1px solid var(--line);
   color: var(--navy);
   font-weight: 800;
 }
@@ -1423,6 +1491,63 @@ input {
   border-color: var(--coral);
   box-shadow: 0 0 0 3px rgba(241, 53, 87, 0.1);
   background: #fff;
+}
+
+.file-upload-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface2);
+}
+
+.file-upload-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.file-upload-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 7px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.file-upload-button:hover {
+  border-color: var(--coral);
+  color: var(--coral-dark);
+}
+
+.file-upload-input:focus-visible + .file-upload-button {
+  border-color: var(--coral);
+  box-shadow: 0 0 0 3px rgba(241, 53, 87, 0.16);
+}
+
+.file-upload-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .form-feedback {
@@ -1443,10 +1568,6 @@ input {
 
 .form-feedback.success {
   color: var(--green);
-}
-
-.form-close {
-  padding-top: 4px;
 }
 
 .form-actions {

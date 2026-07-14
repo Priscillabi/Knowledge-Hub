@@ -69,7 +69,7 @@ const TOOL_COLUMN_CONFIG = {
   - SPEC §4: CENSIMENTO_TOOLS + renderToolField
   - SPEC §5.x / §10: FUNCTIONALITY_CONFIG + hasCodeTrigger
   - SPEC §6: renderDetailSection
-  - SPEC §7: renderClosingSection
+  - SPEC §7: pulsante Invia in index.html
 */
 const CENSIMENTO_INFO_TYPES = [
   {
@@ -1023,7 +1023,6 @@ function renderEntryForm(preserveValues = {}) {
   const title = preserveValues.title || "";
   const desc = preserveValues.desc || "";
   const query = preserveValues.query || "";
-  const sendCopy = preserveValues.sendCopy || false;
 
   elements.entryFormBody.innerHTML = `
     <section class="form-section">
@@ -1047,7 +1046,6 @@ function renderEntryForm(preserveValues = {}) {
       ${entryState.infoType ? renderToolField() : ""}
       ${renderFunctionalitySections()}
       ${entryState.tools.length ? renderDetailSection(desc, query) : ""}
-      ${renderClosingSection(sendCopy)}
     </section>`;
 
   bindEntryFormEvents();
@@ -1201,19 +1199,13 @@ function renderDetailSection(desc, query) {
         <div class="field-help">
           <p>Allegare eventuale documentazione a supporto.</p>
         </div>
-        <input type="file" name="attachments" multiple />
+        <div class="file-upload-control">
+          <input class="file-upload-input" id="entryAttachments" type="file" name="attachments" multiple />
+          <label class="file-upload-button" for="entryAttachments">Scegli file</label>
+          <span class="file-upload-name" id="entryAttachmentNames">Nessun file selezionato</span>
+        </div>
       </label>
     </section>`;
-}
-
-function renderClosingSection(sendCopy) {
-  return `
-    <div class="form-close">
-      <label class="checkbox-row">
-        <input type="checkbox" name="sendCopy" ${sendCopy ? "checked" : ""}>
-        <span>Inviami una copia delle mie risposte</span>
-      </label>
-    </div>`;
 }
 
 function bindEntryFormEvents() {
@@ -1263,6 +1255,9 @@ function bindEntryFormEvents() {
       entryState.otherDetails[tool] = otherInput.value;
     });
   });
+
+  const attachmentInput = elements.entryForm.querySelector("[name='attachments']");
+  attachmentInput?.addEventListener("change", updateAttachmentNames);
 }
 
 function preserveEntryValues() {
@@ -1270,8 +1265,16 @@ function preserveEntryValues() {
     title: elements.entryForm.querySelector("[name='title']")?.value || "",
     desc: elements.entryForm.querySelector("[name='desc']")?.value || "",
     query: elements.entryForm.querySelector("[name='query']")?.value || "",
-    sendCopy: elements.entryForm.querySelector("[name='sendCopy']")?.checked || false,
   };
+}
+
+function updateAttachmentNames() {
+  const input = elements.entryForm.querySelector("[name='attachments']");
+  const label = elements.entryForm.querySelector("#entryAttachmentNames");
+  if (!input || !label) return;
+
+  const names = [...input.files].map((file) => file.name);
+  label.textContent = names.length ? names.join(", ") : "Nessun file selezionato";
 }
 
 function pruneFunctionalityState(selectedTools, valuesByTool) {
@@ -1312,7 +1315,6 @@ function entryPayloadFromForm() {
     otherDetails: entryState.otherDetails,
     desc,
     query,
-    sendCopy: preserved.sendCopy,
     attachmentNames: files.map((file) => file.name),
     tag: buildEntryTags(entryState.tools),
     tagRicerca: entryState.infoType,
