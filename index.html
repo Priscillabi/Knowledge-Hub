@@ -99,89 +99,21 @@
       <section class="entry-modal" role="dialog" aria-modal="true" aria-labelledby="entryModalTitle">
         <div class="entry-modal-head">
           <div>
-            <p class="entry-kicker">Knowledge Hub</p>
-            <h2 id="entryModalTitle">Inserisci nuova informazione</h2>
+            <p class="entry-kicker">Share Your Knowledge</p>
+            <h2 id="entryModalTitle">Censimento informazione</h2>
           </div>
           <button class="modal-close" id="entryModalClose" type="button" aria-label="Chiudi modulo">x</button>
         </div>
 
         <form class="entry-form" id="entryForm" novalidate>
-          <div class="form-grid">
-            <label class="field span-2">
-              <span>Titolo Iniziativa *</span>
-              <input type="text" name="title" autocomplete="off" required placeholder="Es. Dynamic View: gestione filtri su report multi-origine" />
-            </label>
-
-            <label class="field">
-              <span>Tipologia di contenuto *</span>
-              <select name="tipo" required>
-                <option value="">Seleziona...</option>
-                <option value="Best Practice">Best Practice</option>
-                <option value="Elemento tecnico">Elemento tecnico</option>
-                <option value="Issue - Workaround">Issue - Workaround</option>
-                <option value="Template">Template</option>
-              </select>
-            </label>
-
-            <label class="field">
-              <span>Strumento *</span>
-              <select name="strumento" required>
-                <option value="">Seleziona...</option>
-                <option value="Smartsheet">Smartsheet</option>
-                <option value="Power BI">Power BI</option>
-                <option value="Power Query">Power Query</option>
-                <option value="Excel">Excel</option>
-                <option value="Virtus Flow">Virtus Flow</option>
-                <option value="Power Automate">Power Automate</option>
-              </select>
-            </label>
-
-            <label class="field span-2">
-              <span>Descrizione *</span>
-              <textarea name="desc" rows="5" required placeholder="Descrivi il caso, la soluzione o l'informazione da condividere"></textarea>
-            </label>
-
-            <label class="field span-2 is-hidden" data-conditional="workaround">
-              <span>Workaround</span>
-              <textarea name="workaround" rows="3" placeholder="Indica il workaround adottato"></textarea>
-            </label>
-
-            <label class="field span-2 is-hidden" data-conditional="query">
-              <span>Formula / Query</span>
-              <textarea name="query" rows="4" placeholder="Inserisci formula, query, DAX, M o altra sintassi utile"></textarea>
-            </label>
-
-            <label class="field">
-              <span>Elemento tecnico</span>
-              <input type="text" name="technical" placeholder="Es. Dynamic View, DAX, Grafici" />
-            </label>
-
-            <label class="field">
-              <span>Specifica Altro</span>
-              <input type="text" name="specificaAltro" placeholder="Compila solo se serve dettagliare altro" />
-            </label>
-
-            <label class="field span-2">
-              <span>TAG</span>
-              <input type="text" name="tag" placeholder="Tag separati da virgola" />
-            </label>
-
-            <label class="field">
-              <span>Inserita da</span>
-              <input type="email" name="autore" placeholder="nome.cognome@keypartner.com" />
-            </label>
-
-            <label class="field">
-              <span>TAG - Ricerca</span>
-              <input type="text" name="tagRicerca" placeholder="Parole chiave di ricerca" />
-            </label>
-          </div>
+          <p class="required-copy">Fields marked with an asterisk (*) are required.</p>
+          <div id="entryFormBody"></div>
 
           <div class="form-feedback" id="entryFormFeedback" role="status" aria-live="polite"></div>
 
           <div class="form-actions">
             <button class="btn btn-outline" id="entryCancel" type="button">Annulla</button>
-            <button class="btn btn-primary" id="entrySubmit" type="submit">Salva in Smartsheet</button>
+            <button class="btn btn-primary" id="entrySubmit" type="submit">Invia</button>
           </div>
         </form>
       </section>

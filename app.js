@@ -62,6 +62,205 @@ const TOOL_COLUMN_CONFIG = {
   },
 };
 
+/*
+  Censimento informazione form map
+  - SPEC §2: CENSIMENTO_INFO_TYPES + renderInfoTypeField
+  - SPEC §3: renderWorkaroundField + reset on master change
+  - SPEC §4: CENSIMENTO_TOOLS + renderToolField
+  - SPEC §5.x / §10: FUNCTIONALITY_CONFIG + hasCodeTrigger
+  - SPEC §6: renderDetailSection
+  - SPEC §7: renderClosingSection
+*/
+const CENSIMENTO_INFO_TYPES = [
+  {
+    value: "Issue - Workaround",
+    description: "per l'inserimento di una criticità alla quale potrebbe essere associata una risoluzione oppure no",
+  },
+  { value: "Best Practice", description: "per buone pratiche operative" },
+  { value: "Elemento tecnico", description: "(es. Formule, Query, ...)" },
+  { value: "Template", description: "per strutture riutilizzabili" },
+  { value: "Procedure Operative Standard (SOP)", description: "" },
+];
+
+const CENSIMENTO_TOOLS = [
+  "Word",
+  "Power Point",
+  "Excel",
+  "Smartsheet",
+  "Power BI (linguaggio: DAX)",
+  "Power Query (linguaggio: M)",
+  "Virtus Flow",
+  "Power Automate",
+  "Synthesia",
+];
+
+const TOOL_VALUE_ALIASES = {
+  "Power BI (linguaggio: DAX)": "Power BI",
+  "Power Query (linguaggio: M)": "Power Query",
+};
+
+const FUNCTIONALITY_CONFIG = {
+  Excel: {
+    note: "Nota: selezionando Formula, Macro, Funzionalità o Altro viene sbloccato il campo dedicato all'inserimento di un eventuale codice. Se non utilizzato alcun codice, il box può essere lasciato vuoto.",
+    options: [
+      { value: "Formula", triggersCode: true },
+      { value: "Macro", triggersCode: true },
+      { value: "Funzionalità", triggersCode: true },
+      { value: "Altro", triggersCode: true },
+    ],
+  },
+  Smartsheet: {
+    note: "Nota: selezionando Formula viene sbloccato il campo dedicato all'inserimento di un eventuale codice. Se non utilizzato alcun codice, il box può essere lasciato vuoto.",
+    options: [
+      { value: "Formula", triggersCode: true },
+      { value: "Data Shuttle", triggersCode: false },
+      { value: "Data Mesh", triggersCode: false },
+      { value: "Dynamic View", triggersCode: false },
+      { value: "Altro", triggersCode: true },
+    ],
+  },
+  "Power BI": {
+    note: "Nota: selezionando Misura, Colonna Calcolata o Altro viene sbloccato il campo dedicato all'inserimento di un eventuale codice. Se non utilizzato alcun codice, il box può essere lasciato vuoto.",
+    options: [
+      { value: "Misura", triggersCode: true },
+      { value: "Grafici", triggersCode: false },
+      { value: "Colonna Calcolata", triggersCode: true },
+      { value: "Segnalibro", triggersCode: false },
+      { value: "Altro", triggersCode: true },
+    ],
+  },
+  "Power Query": {
+    note: "Nota: selezionando Query, Colonna Personalizzata, Colonna Condizionale o Altro viene sbloccato il campo dedicato all'inserimento di un eventuale codice. Se non utilizzato alcun codice, il box può essere lasciato vuoto.",
+    options: [
+      { value: "Query", triggersCode: true },
+      { value: "Colonna Personalizzata", triggersCode: true },
+      { value: "Colonna Condizionale", triggersCode: true },
+      { value: "Altro", triggersCode: true },
+    ],
+  },
+  "Virtus Flow": {
+    note: "Nota: specificando Altro nel campo omonimo, fa sì che venga sbloccato il campo dedicato all'inserimento di un eventuale codice. Se non utilizzato alcun codice, il box può essere lasciato vuoto.",
+    options: [
+      {
+        value: "Data Object",
+        description:
+          "da selezionare se l'informazione riguarda la struttura dei dati, gli oggetti informativi, i campi, le relazioni o la gestione di database personalizzati utilizzati nel processo",
+        triggersCode: false,
+      },
+      {
+        value: "Workflow",
+        description:
+          "da selezionare se l'informazione riguarda uno step approvativo, una regola di instradamento o una logica esecutiva del processo",
+        triggersCode: false,
+      },
+      {
+        value: "Macro Workflow",
+        description:
+          "da selezionare se l'informazione riguarda la vista end-to-end di un processo, il collegamento tra più workflow o il disegno complessivo di un processo articolato in più fasi",
+        triggersCode: false,
+      },
+      {
+        value: "Document & Template",
+        description:
+          "da selezionare se l'informazione riguarda template riutilizzabili, generazione o gestione documentale, modelli standardizzati oppure configurazioni documentali collegate ai processi",
+        triggersCode: false,
+      },
+      {
+        value: "Ticketing",
+        description:
+          "da selezionare se l'informazione riguarda la gestione di ticket, richieste, segnalazioni, casi di assistenza o attività tracciate tramite logiche di ticketing",
+        triggersCode: false,
+      },
+      {
+        value: "Resource (Internal or External)",
+        description:
+          "da selezionare se l'informazione riguarda utenti, ruoli, gruppi, assegnazioni o risorse interne/esterne coinvolte nel processo",
+        triggersCode: false,
+      },
+      {
+        value: "Reporting",
+        description:
+          "da selezionare se l'informazione riguarda report, dashboard, indicatori, monitoraggio delle performance o analisi dei dati del processo",
+        triggersCode: false,
+      },
+      { value: "Altro", triggersCode: true },
+    ],
+  },
+  "Power Automate": {
+    note: "Nota: specificando Altro nel campo omonimo, fa sì che venga sbloccato il campo dedicato all'inserimento di un eventuale codice. Se non utilizzato alcun codice, il box può essere lasciato vuoto.",
+    options: [
+      {
+        value: "Flow",
+        description:
+          "informazione sul flusso nel suo complesso. In Descrizione specificare la tipologia (Automated Flow, Instant Flow, Scheduled Flow, Desktop Flow)",
+        triggersCode: false,
+      },
+      {
+        value: "Trigger",
+        description:
+          "evento/condizione che avvia il flusso. In Descrizione specificare quale trigger e in quale contesto si attiva",
+        triggersCode: false,
+      },
+      {
+        value: "Azioni",
+        description:
+          "una o più azioni eseguite nel flusso. In Descrizione indicare cosa fa il flusso, quali passaggi esegue, quale output produce",
+        triggersCode: false,
+      },
+      {
+        value: "Logica",
+        description:
+          "condizioni, rami decisionali, cicli o altre logiche di controllo. In Descrizione riportare il comportamento logico implementato e i criteri decisionali",
+        triggersCode: false,
+      },
+      {
+        value: "Variabili",
+        description:
+          "variabili, operazioni sui dati, gestione dei valori. In Descrizione specificare quali variabili/strutture dati e con quale finalità",
+        triggersCode: false,
+      },
+      {
+        value: "Connettori",
+        description:
+          "servizi collegati al flusso (es. Outlook, Teams, SharePoint, Excel, Smartsheet, altri). In Descrizione indicare i connettori utilizzati",
+        triggersCode: false,
+      },
+      {
+        value: "API",
+        description:
+          "integrazioni applicative, endpoint esterni, connessioni avanzate. In Descrizione specificare il tipo di integrazione e lo scopo",
+        triggersCode: false,
+      },
+      {
+        value: "Approvazioni",
+        description:
+          "flusso approvativo/validazione gestita tramite Power Automate. In Descrizione indicare il processo approvativo configurato e i soggetti coinvolti",
+        triggersCode: false,
+      },
+      {
+        value: "Gestione errori",
+        description:
+          "gestione di errori, eccezioni, retry policy, terminazione controllata, notifiche di fallimento. In Descrizione specificare come è configurata la logica di gestione errori",
+        triggersCode: false,
+      },
+      {
+        value: "Monitoring",
+        description: "monitoraggio/diagnostica del flusso. In Descrizione indicare come è impostato il monitoraggio",
+        triggersCode: false,
+      },
+      { value: "Altro", triggersCode: true },
+    ],
+  },
+};
+
+let entryState = {
+  infoType: "",
+  workaround: "",
+  tools: [],
+  functionalities: {},
+  otherDetails: {},
+};
+
 const elements = {
   tipoFilters: document.querySelector("#tipo-filters"),
   toolFilters: document.querySelector("#tool-filters"),
@@ -80,6 +279,7 @@ const elements = {
   introReopen: document.querySelector("#introReopen"),
   newEntryButton: document.querySelector("#new-entry-button"),
   entryModal: document.querySelector("#entryModal"),
+  entryFormBody: document.querySelector("#entryFormBody"),
   entryModalClose: document.querySelector("#entryModalClose"),
   entryForm: document.querySelector("#entryForm"),
   entryCancel: document.querySelector("#entryCancel"),
@@ -794,13 +994,14 @@ function showToast(message) {
 }
 
 function openEntryModal() {
-  elements.entryForm.reset();
+  resetEntryState();
+  delete elements.entryForm.dataset.softConfirmed;
   elements.entryFormFeedback.textContent = "";
   elements.entryFormFeedback.className = "form-feedback";
-  syncEntryFormConditionals();
+  renderEntryForm();
   elements.entryModal.classList.add("show");
   elements.entryModal.setAttribute("aria-hidden", "false");
-  elements.entryForm.elements.title.focus();
+  elements.entryForm.querySelector("[name='title']").focus();
 }
 
 function closeEntryModal() {
@@ -808,49 +1009,342 @@ function closeEntryModal() {
   elements.entryModal.setAttribute("aria-hidden", "true");
 }
 
-function syncEntryFormConditionals() {
-  const tipo = elements.entryForm.elements.tipo.value;
-  const strumento = elements.entryForm.elements.strumento.value;
-  const showWorkaround = tipo === "Issue - Workaround";
-  const showQuery = tipo === "Elemento tecnico" || ["Power BI", "Power Query", "Excel", "Power Automate"].includes(strumento);
-
-  setConditionalVisibility("workaround", showWorkaround);
-  setConditionalVisibility("query", showQuery);
+function resetEntryState() {
+  entryState = {
+    infoType: "",
+    workaround: "",
+    tools: [],
+    functionalities: {},
+    otherDetails: {},
+  };
 }
 
-function setConditionalVisibility(name, visible) {
-  const field = elements.entryForm.querySelector(`[data-conditional="${name}"]`);
-  if (!field) return;
-  field.classList.toggle("is-hidden", !visible);
+function renderEntryForm(preserveValues = {}) {
+  const title = preserveValues.title || "";
+  const desc = preserveValues.desc || "";
+  const query = preserveValues.query || "";
+  const sendCopy = preserveValues.sendCopy || false;
+
+  elements.entryFormBody.innerHTML = `
+    <section class="form-section">
+      <div class="form-intro">
+        <p>
+          In questa sezione vengono raccolte le <strong>informazioni generali</strong> necessarie a classificare il contenuto che si intende inserire.
+        </p>
+        <p>
+          Selezionare la <strong>tipologia di informazione</strong>, lo <strong>strumento</strong> e le eventuali <strong>funzionalità di riferimento</strong>, al fine di consentire una corretta organizzazione e una più efficace ricerca all'interno della libreria di know-how.
+        </p>
+        <p>
+          Le scelte effettuate in questa sezione determinano la struttura dei campi successivi e abilitano la compilazione delle informazioni di dettaglio.
+        </p>
+      </div>
+      <label class="field span-2">
+        <span>Titolo Iniziativa *</span>
+        <input type="text" name="title" autocomplete="off" required value="${escAttr(title)}" placeholder="Inserire un titolo sintetico dell'iniziativa o dell'informazione" />
+      </label>
+      ${renderInfoTypeField()}
+      ${entryState.infoType === "Issue - Workaround" ? renderWorkaroundField() : ""}
+      ${entryState.infoType ? renderToolField() : ""}
+      ${renderFunctionalitySections()}
+      ${entryState.tools.length ? renderDetailSection(desc, query) : ""}
+      ${renderClosingSection(sendCopy)}
+    </section>`;
+
+  bindEntryFormEvents();
+}
+
+function renderInfoTypeField() {
+  return `
+    <label class="field span-2">
+      <span>Che tipo di informazione stai inserendo? *</span>
+      <div class="field-help">
+        <p>Selezionare la tipologia che meglio descrive il contenuto che si sta inserendo, scegliendo un'alternativa tra:</p>
+        <ul>
+          ${CENSIMENTO_INFO_TYPES.map((item) => `<li><strong>${escHtml(item.value)}</strong>${item.description ? ` ${escHtml(item.description)}` : ""}</li>`).join("")}
+        </ul>
+        <p>
+          In caso di SOP, selezionare lo strumento a cui la procedura si riferisce.<br>
+          <em>(es. in caso di una SOP di una soluzione Smartsheet, inserire in Strumento: Smartsheet)</em>
+        </p>
+      </div>
+      <select name="tipo" required>
+        <option value="">Seleziona...</option>
+        ${CENSIMENTO_INFO_TYPES.map((item) => `<option value="${escAttr(item.value)}" ${entryState.infoType === item.value ? "selected" : ""}>${escHtml(item.value)}</option>`).join("")}
+      </select>
+    </label>`;
+}
+
+function renderWorkaroundField() {
+  return `
+    <label class="field span-2">
+      <span>Hai trovato un workaround? *</span>
+      <div class="field-help">
+        <p>Selezionare <strong>'Sì'</strong> se è stata individuata una possibile soluzione alla criticità (Issue) riscontrata.</p>
+        <p>Selezionare <strong>'No'</strong> qualora la criticità non abbia, al momento, una risoluzione definita; in questo caso, l'informazione viene registrata come <strong>limite noto</strong>.</p>
+      </div>
+      <select name="workaround" required>
+        <option value="">Seleziona...</option>
+        <option value="Sì" ${entryState.workaround === "Sì" ? "selected" : ""}>Sì</option>
+        <option value="No" ${entryState.workaround === "No" ? "selected" : ""}>No</option>
+      </select>
+    </label>`;
+}
+
+function renderToolField() {
+  const example =
+    entryState.infoType === "Elemento tecnico"
+      ? "es. Voglio inserire una formula di Smartsheet, allora selezionare in Strumento: Smartsheet"
+      : "es. Voglio inserire un Template di un manuale realizzato in Word, allora selezionare in Strumento: Word";
+
+  return `
+    <div class="field span-2">
+      <span>Strumento *</span>
+      <div class="field-help">
+        <p>Selezionare dall'elenco lo strumento a cui l'informazione che si vuole inserire fa riferimento.</p>
+        <p><em>${escHtml(example)}</em></p>
+      </div>
+      <div class="checkbox-list" role="group" aria-label="Strumento">
+        <label class="checkbox-row select-all-row">
+          <input type="checkbox" data-entry-select-all-tools ${entryState.tools.length === CENSIMENTO_TOOLS.length ? "checked" : ""}>
+          <span>Seleziona tutto</span>
+        </label>
+        ${CENSIMENTO_TOOLS.map((tool) => `
+          <label class="checkbox-row">
+            <input type="checkbox" name="tools" value="${escAttr(tool)}" ${entryState.tools.includes(tool) ? "checked" : ""}>
+            <span>${escHtml(tool)}</span>
+          </label>`).join("")}
+      </div>
+    </div>`;
+}
+
+function renderFunctionalitySections() {
+  return CENSIMENTO_TOOLS.filter((tool) => entryState.tools.includes(tool))
+    .map((tool) => normalizedToolName(tool))
+    .filter((tool) => FUNCTIONALITY_CONFIG[tool])
+    .map((tool) => renderFunctionalitySection(tool))
+    .join("");
+}
+
+function renderFunctionalitySection(tool) {
+  const config = FUNCTIONALITY_CONFIG[tool];
+  const selected = entryState.functionalities[tool] || [];
+  const showOther = selected.includes("Altro");
+
+  return `
+    <section class="form-subsection" data-functionality-section="${escAttr(tool)}">
+      <h3>${escHtml(tool)}</h3>
+      <div class="field-help">
+        <p>Selezionare dall'elenco una o più funzionalità di ${escHtml(tool)} a cui l'informazione che si vuole inserire fa riferimento.</p>
+        <p><strong>${escHtml(config.note)}</strong></p>
+      </div>
+      <div class="field recommended-field">
+        <span>Funzionalità di ${escHtml(tool)} <em>consigliato</em></span>
+        <div class="checkbox-list" role="group" aria-label="Funzionalità di ${escAttr(tool)}">
+          ${config.options.map((option) => `
+            <label class="checkbox-row">
+              <input type="checkbox" name="functionality-${escAttr(tool)}" value="${escAttr(option.value)}" ${selected.includes(option.value) ? "checked" : ""}>
+              <span><strong>${escHtml(option.value)}</strong>${option.description ? `: ${escHtml(option.description)}` : ""}</span>
+            </label>`).join("")}
+        </div>
+      </div>
+      ${showOther ? `
+        <label class="field">
+          <span>Specifica Altro</span>
+          <div class="field-help">
+            <p>Specificare la funzionalità dello strumento a cui l'informazione che si vuole inserire fa riferimento.</p>
+          </div>
+          <input type="text" name="other-${escAttr(tool)}" value="${escAttr(entryState.otherDetails[tool] || "")}" />
+        </label>` : ""}
+    </section>`;
+}
+
+function renderDetailSection(desc, query) {
+  const showQuery = hasCodeTrigger();
+
+  return `
+    <section class="form-subsection detail-section">
+      <h3>Dettaglio informazione</h3>
+      <div class="field-help">
+        <p>
+          Nella presente sezione è richiesto di descrivere nel <strong>dettaglio il contenuto dell'informazione</strong>, fornendo tutti gli elementi utili alla sua comprensione e al suo riutilizzo.
+        </p>
+        <p>
+          Inserire in modo chiaro e strutturato il contesto, il <strong>problema o l'obiettivo</strong> affrontato, la <strong>soluzione</strong> adottata e gli eventuali <strong>risultati o considerazioni</strong> rilevanti.
+        </p>
+        <p>
+          Una descrizione completa consente di valorizzare il contributo inserito e di renderlo effettivamente utile per i progetti futuri e per l'intero team.
+        </p>
+      </div>
+      <label class="field recommended-field">
+        <span>Descrizione <em>consigliato</em></span>
+        <div class="field-help">
+          <p>Inserire una descrizione che risponda alle seguenti domande:</p>
+          <ul>
+            <li>Qual è il contesto (es. progetto, processo, cliente, etc.) e l'obiettivo dell'informazione?</li>
+            <li>Quale è stato o quale è il problema riscontrato?</li>
+            <li>Quale è stata o quale è la soluzione adottata?</li>
+          </ul>
+          <p><strong>NOTA</strong>: Le domande proposte sono una guida orientativa per facilitare l'elaborazione del campo descrittivo; pertanto, il campo può essere utilizzato anche per inserire eventuali note o commenti rilevanti.</p>
+        </div>
+        <textarea name="desc" rows="6" placeholder="Una descrizione completa rende questa informazione molto più utile per il team...">${escHtml(desc)}</textarea>
+      </label>
+      ${showQuery ? `
+        <label class="field recommended-field">
+          <span>Inserire la formula o la query all'interno del box <em>consigliato</em></span>
+          <div class="field-help">
+            <p>Se la formula/query supera il limite dei caratteri consentiti (max 4.000), si consiglia di caricarla come allegato nella sezione dedicata.</p>
+          </div>
+          <textarea name="query" rows="7" placeholder="Inserire qui formula, query, codice o logica tecnica da condividere.">${escHtml(query)}</textarea>
+        </label>` : ""}
+      <label class="field">
+        <span>File Upload</span>
+        <div class="field-help">
+          <p>Allegare eventuale documentazione a supporto.</p>
+        </div>
+        <input type="file" name="attachments" multiple />
+      </label>
+    </section>`;
+}
+
+function renderClosingSection(sendCopy) {
+  return `
+    <div class="form-close">
+      <label class="checkbox-row">
+        <input type="checkbox" name="sendCopy" ${sendCopy ? "checked" : ""}>
+        <span>Inviami una copia delle mie risposte</span>
+      </label>
+    </div>`;
+}
+
+function bindEntryFormEvents() {
+  const typeSelect = elements.entryForm.querySelector("[name='tipo']");
+  const workaroundSelect = elements.entryForm.querySelector("[name='workaround']");
+  const selectAllTools = elements.entryForm.querySelector("[data-entry-select-all-tools]");
+
+  typeSelect?.addEventListener("change", () => {
+    entryState.infoType = typeSelect.value;
+    entryState.workaround = "";
+    entryState.tools = [];
+    entryState.functionalities = {};
+    entryState.otherDetails = {};
+    renderEntryForm(preserveEntryValues());
+  });
+
+  workaroundSelect?.addEventListener("change", () => {
+    entryState.workaround = workaroundSelect.value;
+  });
+
+  selectAllTools?.addEventListener("change", () => {
+    entryState.tools = selectAllTools.checked ? [...CENSIMENTO_TOOLS] : [];
+    entryState.functionalities = pruneFunctionalityState(entryState.tools, entryState.functionalities);
+    entryState.otherDetails = pruneFunctionalityState(entryState.tools, entryState.otherDetails);
+    renderEntryForm(preserveEntryValues());
+  });
+
+  elements.entryForm.querySelectorAll("[name='tools']").forEach((input) => {
+    input.addEventListener("change", () => {
+      entryState.tools = [...elements.entryForm.querySelectorAll("[name='tools']:checked")].map((item) => item.value);
+      entryState.functionalities = pruneFunctionalityState(entryState.tools, entryState.functionalities);
+      entryState.otherDetails = pruneFunctionalityState(entryState.tools, entryState.otherDetails);
+      renderEntryForm(preserveEntryValues());
+    });
+  });
+
+  Object.keys(FUNCTIONALITY_CONFIG).forEach((tool) => {
+    elements.entryForm.querySelectorAll(`[name='functionality-${cssEscape(tool)}']`).forEach((input) => {
+      input.addEventListener("change", () => {
+        entryState.functionalities[tool] = [...elements.entryForm.querySelectorAll(`[name='functionality-${cssEscape(tool)}']:checked`)].map((item) => item.value);
+        renderEntryForm(preserveEntryValues());
+      });
+    });
+
+    const otherInput = elements.entryForm.querySelector(`[name='other-${cssEscape(tool)}']`);
+    otherInput?.addEventListener("input", () => {
+      entryState.otherDetails[tool] = otherInput.value;
+    });
+  });
+}
+
+function preserveEntryValues() {
+  return {
+    title: elements.entryForm.querySelector("[name='title']")?.value || "",
+    desc: elements.entryForm.querySelector("[name='desc']")?.value || "",
+    query: elements.entryForm.querySelector("[name='query']")?.value || "",
+    sendCopy: elements.entryForm.querySelector("[name='sendCopy']")?.checked || false,
+  };
+}
+
+function pruneFunctionalityState(selectedTools, valuesByTool) {
+  const selectedNormalizedTools = new Set(selectedTools.map(normalizedToolName));
+  return Object.fromEntries(Object.entries(valuesByTool).filter(([tool]) => selectedNormalizedTools.has(tool)));
+}
+
+function normalizedToolName(tool) {
+  return TOOL_VALUE_ALIASES[tool] || tool;
+}
+
+function cssEscape(value) {
+  return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function hasCodeTrigger() {
+  return Object.entries(entryState.functionalities).some(([tool, selected]) => {
+    const config = FUNCTIONALITY_CONFIG[tool];
+    return selected.some((value) => config?.options.find((option) => option.value === value)?.triggersCode);
+  });
 }
 
 function entryPayloadFromForm() {
-  const formData = new FormData(elements.entryForm);
-  const payload = Object.fromEntries(formData.entries());
+  const preserved = preserveEntryValues();
+  const desc = elements.entryForm.querySelector("[name='desc']")?.value.trim() || "";
+  const query = elements.entryForm.querySelector("[name='query']")?.value.trim() || "";
+  const files = [...(elements.entryForm.querySelector("[name='attachments']")?.files || [])];
+  const normalizedTools = entryState.tools.map(normalizedToolName);
 
-  Object.keys(payload).forEach((key) => {
-    payload[key] = String(payload[key] || "").trim();
-  });
+  return {
+    title: preserved.title.trim(),
+    tipo: entryState.infoType,
+    workaround: entryState.workaround,
+    strumenti: [...entryState.tools],
+    normalizedStrumenti: normalizedTools,
+    strumento: entryState.tools.join(", "),
+    functionalities: entryState.functionalities,
+    otherDetails: entryState.otherDetails,
+    desc,
+    query,
+    sendCopy: preserved.sendCopy,
+    attachmentNames: files.map((file) => file.name),
+    tag: buildEntryTags(entryState.tools),
+    tagRicerca: entryState.infoType,
+  };
+}
 
-  return payload;
+function buildEntryTags(tools) {
+  const functionalityTags = Object.values(entryState.functionalities).flat();
+  return [...new Set([entryState.infoType, ...tools, ...functionalityTags].filter(Boolean))].join(", ");
 }
 
 function validateEntryPayload(payload) {
   const missing = [];
   if (!payload.title) missing.push("Titolo Iniziativa");
-  if (!payload.tipo) missing.push("Tipologia di contenuto");
-  if (!payload.strumento) missing.push("Strumento");
-  if (!payload.desc) missing.push("Descrizione");
+  if (!payload.tipo) missing.push("Che tipo di informazione stai inserendo?");
+  if (payload.tipo === "Issue - Workaround" && !payload.workaround) missing.push("Hai trovato un workaround?");
+  if (!payload.strumenti.length) missing.push("Strumento");
 
   if (missing.length) {
     return `Compila i campi obbligatori: ${missing.join(", ")}.`;
   }
 
-  if (payload.autore && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.autore)) {
-    return "Inserisci un indirizzo email valido nel campo Inserita da.";
-  }
-
   return "";
+}
+
+function softEntryWarnings(payload) {
+  const warnings = [];
+  const selectedFunctionalityCount = Object.values(payload.functionalities).flat().length;
+  if (!payload.desc) warnings.push("Descrizione");
+  if (payload.normalizedStrumenti.some((tool) => FUNCTIONALITY_CONFIG[tool]) && !selectedFunctionalityCount) warnings.push("Funzionalità");
+  if (hasCodeTrigger() && !payload.query) warnings.push("formula o query");
+  return warnings;
 }
 
 function setEntryFormFeedback(message, state = "") {
@@ -869,11 +1363,19 @@ async function submitEntryForm(event) {
     return;
   }
 
+  const warnings = softEntryWarnings(payload);
+  if (warnings.length && !elements.entryForm.dataset.softConfirmed) {
+    elements.entryForm.dataset.softConfirmed = "true";
+    setEntryFormFeedback(`Stai per inviare senza compilare: ${warnings.join(", ")}. Premi di nuovo Invia per procedere comunque.`, "warning");
+    return;
+  }
+
   elements.entrySubmit.disabled = true;
-  elements.entrySubmit.textContent = "Salvataggio...";
+  elements.entrySubmit.textContent = "Invio...";
   setEntryFormFeedback("Invio della nuova informazione a Smartsheet...", "info");
 
   try {
+    payload.attachments = await readEntryAttachments();
     const response = await fetch("/api/smartsheet-create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -893,8 +1395,30 @@ async function submitEntryForm(event) {
     setEntryFormFeedback(error.message || "Impossibile salvare la nuova informazione.", "error");
   } finally {
     elements.entrySubmit.disabled = false;
-    elements.entrySubmit.textContent = "Salva in Smartsheet";
+    elements.entrySubmit.textContent = "Invia";
   }
+}
+
+function readEntryAttachments() {
+  const files = [...(elements.entryForm.querySelector("[name='attachments']")?.files || [])];
+  return Promise.all(
+    files.map(
+      (file) =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = String(reader.result || "");
+            resolve({
+              name: file.name,
+              type: file.type || "application/octet-stream",
+              dataBase64: result.includes(",") ? result.split(",").pop() : result,
+            });
+          };
+          reader.onerror = () => reject(reader.error || new Error("Impossibile leggere l'allegato."));
+          reader.readAsDataURL(file);
+        }),
+    ),
+  );
 }
 
 function highlight(text, term) {
@@ -924,8 +1448,6 @@ elements.newEntryButton.addEventListener("click", openEntryModal);
 elements.entryModalClose.addEventListener("click", closeEntryModal);
 elements.entryCancel.addEventListener("click", closeEntryModal);
 elements.entryForm.addEventListener("submit", submitEntryForm);
-elements.entryForm.elements.tipo.addEventListener("change", syncEntryFormConditionals);
-elements.entryForm.elements.strumento.addEventListener("change", syncEntryFormConditionals);
 elements.entryModal.addEventListener("click", (event) => {
   if (event.target === elements.entryModal) closeEntryModal();
 });
