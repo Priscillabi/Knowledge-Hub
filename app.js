@@ -260,6 +260,7 @@ let entryState = {
   functionalities: {},
   otherDetails: {},
 };
+let pendingEntryScrollPositions = {};
 
 const elements = {
   tipoFilters: document.querySelector("#tipo-filters"),
@@ -1052,6 +1053,7 @@ function renderEntryForm(preserveValues = {}) {
     </section>`;
 
   bindEntryFormEvents();
+  restoreEntryScrollPositions();
 }
 
 function renderInfoTypeField() {
@@ -1104,16 +1106,18 @@ function renderToolField() {
         <p>Selezionare dall'elenco lo strumento a cui l'informazione che si vuole inserire fa riferimento.</p>
         <p><em>${escHtml(example)}</em></p>
       </div>
-      <div class="checkbox-list" role="group" aria-label="Strumento">
+      <div class="checkbox-list tool-list" data-scroll-key="tools" role="group" aria-label="Strumento">
         <label class="checkbox-row select-all-row">
           <input type="checkbox" data-entry-select-all-tools ${entryState.tools.length === CENSIMENTO_TOOLS.length ? "checked" : ""}>
           <span>Seleziona tutto</span>
         </label>
+        <div class="tool-options-grid">
         ${CENSIMENTO_TOOLS.map((tool) => `
           <label class="checkbox-row">
             <input type="checkbox" name="tools" value="${escAttr(tool)}" ${entryState.tools.includes(tool) ? "checked" : ""}>
             <span>${escHtml(tool)}</span>
           </label>`).join("")}
+        </div>
       </div>
     </div>`;
 }
@@ -1140,7 +1144,7 @@ function renderFunctionalitySection(tool) {
       </div>
       <div class="field">
         <span>Funzionalità di ${escHtml(tool)} ${requiredMark()}</span>
-        <div class="checkbox-list" role="group" aria-label="Funzionalità di ${escAttr(tool)}">
+        <div class="checkbox-list" data-scroll-key="functionality-${escAttr(tool)}" role="group" aria-label="Funzionalità di ${escAttr(tool)}">
           ${config.options.map((option) => `
             <label class="checkbox-row">
               <input type="checkbox" name="functionality-${escAttr(tool)}" value="${escAttr(option.value)}" ${selected.includes(option.value) ? "checked" : ""}>
@@ -1217,6 +1221,7 @@ function bindEntryFormEvents() {
   const selectAllTools = elements.entryForm.querySelector("[data-entry-select-all-tools]");
 
   typeSelect?.addEventListener("change", () => {
+    captureEntryScrollPositions();
     entryState.infoType = typeSelect.value;
     entryState.workaround = "";
     entryState.tools = [];
@@ -1230,6 +1235,7 @@ function bindEntryFormEvents() {
   });
 
   selectAllTools?.addEventListener("change", () => {
+    captureEntryScrollPositions();
     entryState.tools = selectAllTools.checked ? [...CENSIMENTO_TOOLS] : [];
     entryState.functionalities = pruneFunctionalityState(entryState.tools, entryState.functionalities);
     entryState.otherDetails = pruneFunctionalityState(entryState.tools, entryState.otherDetails);
@@ -1238,6 +1244,7 @@ function bindEntryFormEvents() {
 
   elements.entryForm.querySelectorAll("[name='tools']").forEach((input) => {
     input.addEventListener("change", () => {
+      captureEntryScrollPositions();
       entryState.tools = [...elements.entryForm.querySelectorAll("[name='tools']:checked")].map((item) => item.value);
       entryState.functionalities = pruneFunctionalityState(entryState.tools, entryState.functionalities);
       entryState.otherDetails = pruneFunctionalityState(entryState.tools, entryState.otherDetails);
@@ -1248,6 +1255,7 @@ function bindEntryFormEvents() {
   Object.keys(FUNCTIONALITY_CONFIG).forEach((tool) => {
     elements.entryForm.querySelectorAll(`[name='functionality-${cssEscape(tool)}']`).forEach((input) => {
       input.addEventListener("change", () => {
+        captureEntryScrollPositions();
         entryState.functionalities[tool] = [...elements.entryForm.querySelectorAll(`[name='functionality-${cssEscape(tool)}']:checked`)].map((item) => item.value);
         renderEntryForm(preserveEntryValues());
       });
@@ -1261,6 +1269,24 @@ function bindEntryFormEvents() {
 
   const attachmentInput = elements.entryForm.querySelector("[name='attachments']");
   attachmentInput?.addEventListener("change", updateAttachmentNames);
+}
+
+function captureEntryScrollPositions() {
+  pendingEntryScrollPositions = {};
+  elements.entryForm.querySelectorAll("[data-scroll-key]").forEach((node) => {
+    pendingEntryScrollPositions[node.dataset.scrollKey] = node.scrollTop;
+  });
+}
+
+function restoreEntryScrollPositions() {
+  window.requestAnimationFrame(() => {
+    elements.entryForm.querySelectorAll("[data-scroll-key]").forEach((node) => {
+      const key = node.dataset.scrollKey;
+      if (Object.prototype.hasOwnProperty.call(pendingEntryScrollPositions, key)) {
+        node.scrollTop = pendingEntryScrollPositions[key];
+      }
+    });
+  });
 }
 
 function preserveEntryValues() {

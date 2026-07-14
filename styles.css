@@ -1402,6 +1402,24 @@ textarea {
   background: var(--surface2);
 }
 
+.tool-list {
+  max-height: none;
+  overflow: visible;
+}
+
+.tool-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tool-options-grid .checkbox-row:nth-last-child(2) {
+  border-bottom: 0;
+}
+
+.tool-options-grid .checkbox-row:nth-child(odd) {
+  border-right: 1px solid rgba(219, 225, 234, 0.78);
+}
+
 .checkbox-row {
   display: flex;
   align-items: center;
@@ -1640,6 +1658,18 @@ textarea {
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .tool-options-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-options-grid .checkbox-row:nth-child(odd) {
+    border-right: 0;
+  }
+
+  .tool-options-grid .checkbox-row:nth-last-child(2) {
+    border-bottom: 1px solid rgba(219, 225, 234, 0.78);
   }
 
   .field.span-2 {
