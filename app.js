@@ -995,7 +995,6 @@ function showToast(message) {
 
 function openEntryModal() {
   resetEntryState();
-  delete elements.entryForm.dataset.softConfirmed;
   elements.entryFormFeedback.textContent = "";
   elements.entryFormFeedback.className = "form-feedback";
   renderEntryForm();
@@ -1007,6 +1006,10 @@ function openEntryModal() {
 function closeEntryModal() {
   elements.entryModal.classList.remove("show");
   elements.entryModal.setAttribute("aria-hidden", "true");
+}
+
+function requiredMark() {
+  return '<span class="required-mark">*</span>';
 }
 
 function resetEntryState() {
@@ -1038,7 +1041,7 @@ function renderEntryForm(preserveValues = {}) {
         </p>
       </div>
       <label class="field span-2">
-        <span>Titolo Iniziativa *</span>
+        <span>Titolo Iniziativa ${requiredMark()}</span>
         <input type="text" name="title" autocomplete="off" required value="${escAttr(title)}" placeholder="Inserire un titolo sintetico dell'iniziativa o dell'informazione" />
       </label>
       ${renderInfoTypeField()}
@@ -1054,7 +1057,7 @@ function renderEntryForm(preserveValues = {}) {
 function renderInfoTypeField() {
   return `
     <label class="field span-2">
-      <span>Che tipo di informazione stai inserendo? *</span>
+      <span>Che tipo di informazione stai inserendo? ${requiredMark()}</span>
       <div class="field-help">
         <p>Selezionare la tipologia che meglio descrive il contenuto che si sta inserendo, scegliendo un'alternativa tra:</p>
         <ul>
@@ -1075,7 +1078,7 @@ function renderInfoTypeField() {
 function renderWorkaroundField() {
   return `
     <label class="field span-2">
-      <span>Hai trovato un workaround? *</span>
+      <span>Hai trovato un workaround? ${requiredMark()}</span>
       <div class="field-help">
         <p>Selezionare <strong>'Sì'</strong> se è stata individuata una possibile soluzione alla criticità (Issue) riscontrata.</p>
         <p>Selezionare <strong>'No'</strong> qualora la criticità non abbia, al momento, una risoluzione definita; in questo caso, l'informazione viene registrata come <strong>limite noto</strong>.</p>
@@ -1096,7 +1099,7 @@ function renderToolField() {
 
   return `
     <div class="field span-2">
-      <span>Strumento *</span>
+      <span>Strumento ${requiredMark()}</span>
       <div class="field-help">
         <p>Selezionare dall'elenco lo strumento a cui l'informazione che si vuole inserire fa riferimento.</p>
         <p><em>${escHtml(example)}</em></p>
@@ -1135,8 +1138,8 @@ function renderFunctionalitySection(tool) {
         <p>Selezionare dall'elenco una o più funzionalità di ${escHtml(tool)} a cui l'informazione che si vuole inserire fa riferimento.</p>
         <p><strong>${escHtml(config.note)}</strong></p>
       </div>
-      <div class="field recommended-field">
-        <span>Funzionalità di ${escHtml(tool)} <em>consigliato</em></span>
+      <div class="field">
+        <span>Funzionalità di ${escHtml(tool)} ${requiredMark()}</span>
         <div class="checkbox-list" role="group" aria-label="Funzionalità di ${escAttr(tool)}">
           ${config.options.map((option) => `
             <label class="checkbox-row">
@@ -1147,7 +1150,7 @@ function renderFunctionalitySection(tool) {
       </div>
       ${showOther ? `
         <label class="field">
-          <span>Specifica Altro</span>
+          <span>Specifica Altro ${requiredMark()}</span>
           <div class="field-help">
             <p>Specificare la funzionalità dello strumento a cui l'informazione che si vuole inserire fa riferimento.</p>
           </div>
@@ -1173,8 +1176,8 @@ function renderDetailSection(desc, query) {
           Una descrizione completa consente di valorizzare il contributo inserito e di renderlo effettivamente utile per i progetti futuri e per l'intero team.
         </p>
       </div>
-      <label class="field recommended-field">
-        <span>Descrizione <em>consigliato</em></span>
+      <label class="field">
+        <span>Descrizione ${requiredMark()}</span>
         <div class="field-help">
           <p>Inserire una descrizione che risponda alle seguenti domande:</p>
           <ul>
@@ -1187,8 +1190,8 @@ function renderDetailSection(desc, query) {
         <textarea name="desc" rows="6" placeholder="Una descrizione completa rende questa informazione molto più utile per il team...">${escHtml(desc)}</textarea>
       </label>
       ${showQuery ? `
-        <label class="field recommended-field">
-          <span>Inserire la formula o la query all'interno del box <em>consigliato</em></span>
+        <label class="field">
+          <span>Inserire la formula o la query all'interno del box ${requiredMark()}</span>
           <div class="field-help">
             <p>Se la formula/query supera il limite dei caratteri consentiti (max 4.000), si consiglia di caricarla come allegato nella sezione dedicata.</p>
           </div>
@@ -1332,21 +1335,29 @@ function validateEntryPayload(payload) {
   if (!payload.tipo) missing.push("Che tipo di informazione stai inserendo?");
   if (payload.tipo === "Issue - Workaround" && !payload.workaround) missing.push("Hai trovato un workaround?");
   if (!payload.strumenti.length) missing.push("Strumento");
+  if (payload.strumenti.length && !payload.desc) missing.push("Descrizione");
+
+  payload.normalizedStrumenti.forEach((tool) => {
+    if (!FUNCTIONALITY_CONFIG[tool]) return;
+
+    const selected = Array.isArray(payload.functionalities[tool]) ? payload.functionalities[tool] : [];
+    if (!selected.length) {
+      missing.push(`Funzionalità di ${tool}`);
+      return;
+    }
+
+    if (selected.includes("Altro") && !String(payload.otherDetails[tool] || "").trim()) {
+      missing.push(`Specifica Altro (${tool})`);
+    }
+  });
+
+  if (hasCodeTrigger() && !payload.query) missing.push("Inserire la formula o la query all'interno del box");
 
   if (missing.length) {
     return `Compila i campi obbligatori: ${missing.join(", ")}.`;
   }
 
   return "";
-}
-
-function softEntryWarnings(payload) {
-  const warnings = [];
-  const selectedFunctionalityCount = Object.values(payload.functionalities).flat().length;
-  if (!payload.desc) warnings.push("Descrizione");
-  if (payload.normalizedStrumenti.some((tool) => FUNCTIONALITY_CONFIG[tool]) && !selectedFunctionalityCount) warnings.push("Funzionalità");
-  if (hasCodeTrigger() && !payload.query) warnings.push("formula o query");
-  return warnings;
 }
 
 function setEntryFormFeedback(message, state = "") {
@@ -1362,13 +1373,6 @@ async function submitEntryForm(event) {
 
   if (validationMessage) {
     setEntryFormFeedback(validationMessage, "error");
-    return;
-  }
-
-  const warnings = softEntryWarnings(payload);
-  if (warnings.length && !elements.entryForm.dataset.softConfirmed) {
-    elements.entryForm.dataset.softConfirmed = "true";
-    setEntryFormFeedback(`Stai per inviare senza compilare: ${warnings.join(", ")}. Premi di nuovo Invia per procedere comunque.`, "warning");
     return;
   }
 

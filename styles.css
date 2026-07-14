@@ -1355,17 +1355,9 @@ textarea {
   line-height: 1.35;
 }
 
-.recommended-field > span em {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 6px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: var(--amber-soft);
-  color: var(--amber);
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 800;
+.required-mark {
+  color: var(--coral);
+  font-weight: 900;
 }
 
 .field input,
@@ -1409,7 +1401,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 44px;
+  min-height: 48px;
   padding: 12px;
   border-bottom: 1px solid rgba(219, 225, 234, 0.78);
   color: var(--muted);
@@ -1428,14 +1420,19 @@ textarea {
   color: var(--ink);
 }
 
+.checkbox-row:has(input:checked) {
+  background: var(--coral-soft);
+  color: var(--ink);
+}
+
 .checkbox-row input {
   position: relative;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
   margin: 0;
   border: 1px solid var(--line-strong);
-  border-radius: 5px;
+  border-radius: 6px;
   appearance: none;
   background: #fff;
   accent-color: var(--coral);
@@ -1446,10 +1443,10 @@ textarea {
 .checkbox-row input::after {
   content: "";
   position: absolute;
-  left: 5px;
-  top: 2px;
-  width: 5px;
-  height: 9px;
+  left: 8px;
+  top: 4px;
+  width: 6px;
+  height: 11px;
   border: solid #fff;
   border-width: 0 2px 2px 0;
   opacity: 0;
@@ -1483,6 +1480,11 @@ textarea {
 .select-all-row {
   color: var(--navy);
   font-weight: 800;
+}
+
+.detail-section {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .field input:focus,
@@ -1560,10 +1562,6 @@ textarea {
 
 .form-feedback.error {
   color: var(--coral-dark);
-}
-
-.form-feedback.warning {
-  color: var(--amber);
 }
 
 .form-feedback.success {
