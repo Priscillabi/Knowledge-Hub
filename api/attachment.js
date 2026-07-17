@@ -11,6 +11,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    // Attachment URLs must be requested in the context of the sheet that owns them.
     const attachment = await smartsheetFetch(`/sheets/${getSheetId()}/attachments/${encodeURIComponent(attachmentId)}`);
     const mode = String(req.query.mode || "metadata").trim();
 
