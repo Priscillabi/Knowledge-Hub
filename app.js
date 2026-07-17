@@ -265,6 +265,7 @@ let pendingEntryScrollPositions = {};
 
 const BROWSER_PREVIEW_EXTENSIONS = new Set(["PDF", "PNG", "JPG", "JPEG", "GIF", "WEBP", "TXT"]);
 const OFFICE_PREVIEW_EXTENSIONS = new Set(["DOC", "DOCX", "XLS", "XLSX", "PPT", "PPTX"]);
+const MAX_DIRECT_ATTACHMENT_BYTES = 4.2 * 1024 * 1024;
 
 const elements = {
   tipoFilters: document.querySelector("#tipo-filters"),
@@ -902,7 +903,7 @@ function attachmentTemplate(attachment) {
   const canDownload = Boolean(attachment.id);
   const actions = [
     canPreview
-      ? `<button class="attachment-link" type="button" data-preview-attachment-id="${escAttr(attachment.id)}" data-preview-mode="${escAttr(previewMode)}">Anteprima</button>`
+      ? `<button class="attachment-link" type="button" data-preview-attachment-id="${escAttr(attachment.id)}" data-preview-mode="${escAttr(previewMode)}" data-preview-filename="${escAttr(attachment.name || "allegato")}">Anteprima</button>`
       : "",
     canDownload ? `<button class="attachment-link" type="button" data-download-attachment-id="${escAttr(attachment.id)}">Scarica</button>` : "",
   ].filter(Boolean);
@@ -914,7 +915,7 @@ function attachmentTemplate(attachment) {
         <div>
           ${
             canPreview
-              ? `<button class="attachment-name attachment-name-button" type="button" data-preview-attachment-id="${escAttr(attachment.id)}" data-preview-mode="${escAttr(previewMode)}">${escHtml(attachment.name || "Allegato")}</button>`
+              ? `<button class="attachment-name attachment-name-button" type="button" data-preview-attachment-id="${escAttr(attachment.id)}" data-preview-mode="${escAttr(previewMode)}" data-preview-filename="${escAttr(attachment.name || "allegato")}">${escHtml(attachment.name || "Allegato")}</button>`
               : `<div class="attachment-name">${escHtml(attachment.name || "Allegato")}</div>`
           }
           ${meta ? `<div class="attachment-meta">${escHtml(meta)}</div>` : ""}
@@ -947,7 +948,9 @@ function previewAttachment(button) {
   const previewUrl = `/api/attachment?attachmentId=${encodeURIComponent(attachmentId)}&mode=preview`;
 
   if (button.dataset.previewMode === "office") {
-    const absolutePreviewUrl = new URL(previewUrl, window.location.origin).href;
+    const fileName = button.dataset.previewFilename || `allegato.${fileExtension(button.dataset.previewFilename) || "docx"}`;
+    const officePreviewUrl = `/api/attachment-file/${encodeURIComponent(attachmentId)}/${encodeURIComponent(fileName)}`;
+    const absolutePreviewUrl = new URL(officePreviewUrl, window.location.origin).href;
     const officeViewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(absolutePreviewUrl)}`;
     window.open(officeViewerUrl, "_blank", "noopener,noreferrer");
     return;
@@ -1489,6 +1492,11 @@ function validateEntryPayload(payload) {
 
   if (missing.length) {
     return `Compila i campi obbligatori: ${missing.join(", ")}.`;
+  }
+
+  const oversizedFiles = entryAttachmentFiles.filter((file) => file.size > MAX_DIRECT_ATTACHMENT_BYTES);
+  if (oversizedFiles.length) {
+    return `Gli allegati caricati dal sito possono pesare al massimo 4,2 MB ciascuno per il limite tecnico di Vercel. Rimuovi o riduci: ${oversizedFiles.map((file) => file.name).join(", ")}.`;
   }
 
   return "";

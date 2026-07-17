@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/attachment-file/:attachmentId/:fileName",
+      "destination": "/api/attachment?attachmentId=:attachmentId&mode=preview"
+    }
+  ]
+}

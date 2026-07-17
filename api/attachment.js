@@ -1,7 +1,7 @@
 const { getSheetId, json, smartsheetFetch } = require("./_smartsheet");
 
 module.exports = async function handler(req, res) {
-  if (req.method !== "GET") {
+  if (req.method !== "GET" && req.method !== "HEAD") {
     return json(res, 405, { error: "Metodo non consentito." });
   }
 
@@ -16,7 +16,7 @@ module.exports = async function handler(req, res) {
     const mode = String(req.query.mode || "metadata").trim();
 
     if (mode === "preview" || mode === "download") {
-      return streamAttachment(res, attachment, mode);
+      return streamAttachment(req, res, attachment, mode);
     }
 
     return json(res, 200, {
@@ -34,7 +34,7 @@ module.exports = async function handler(req, res) {
   }
 };
 
-async function streamAttachment(res, attachment, mode) {
+async function streamAttachment(req, res, attachment, mode) {
   if (!attachment.url) {
     return json(res, 404, {
       error: "ATTACHMENT_URL_UNAVAILABLE",
@@ -59,6 +59,13 @@ async function streamAttachment(res, attachment, mode) {
   res.setHeader("Content-Type", contentType);
   res.setHeader("Content-Length", String(bytes.length));
   res.setHeader("Content-Disposition", `${disposition}; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+  res.setHeader("Cache-Control", "private, no-store");
+
+  if (req.method === "HEAD") {
+    res.end();
+    return;
+  }
+
   res.end(bytes);
 }
 
