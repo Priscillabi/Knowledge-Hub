@@ -1,11 +1,11 @@
-const { getSheetId, json, smartsheetFetch, normalizeRow } = require("./_smartsheet");
-
 module.exports = async function handler(req, res) {
-  if (req.method !== "GET") {
-    return json(res, 405, { error: "Metodo non consentito." });
-  }
-
   try {
+    const { getSheetId, json, smartsheetFetch, normalizeRow } = require("./_smartsheet");
+
+    if (req.method !== "GET") {
+      return json(res, 405, { error: "Metodo non consentito." });
+    }
+
     const sheet = await smartsheetFetch(`/sheets/${getSheetId()}?include=attachments`);
     const columnsById = new Map((sheet.columns || []).map((column) => [column.id, column]));
 
@@ -23,10 +23,16 @@ module.exports = async function handler(req, res) {
       },
     });
   } catch (error) {
-    return json(res, error.statusCode || 500, {
+    return sendJson(res, error.statusCode || 500, {
       error: "SMARTSHEET_READ_FAILED",
       message: error.message,
       details: error.details,
     });
   }
 };
+
+function sendJson(res, statusCode, payload) {
+  res.statusCode = statusCode;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(payload));
+}

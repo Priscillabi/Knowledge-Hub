@@ -35,15 +35,6 @@ function sanitizePayload(body = {}) {
   payload.attachmentNames = Array.isArray(body.attachmentNames)
     ? body.attachmentNames.map((item) => String(item || "").trim()).filter(Boolean)
     : [];
-  payload.attachments = Array.isArray(body.attachments)
-    ? body.attachments
-        .map((item) => ({
-          name: String(item?.name || "").trim(),
-          type: String(item?.type || "application/octet-stream").trim(),
-          dataBase64: String(item?.dataBase64 || "").trim(),
-        }))
-        .filter((item) => item.name && item.dataBase64)
-    : [];
   return payload;
 }
 
@@ -130,13 +121,12 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify([{ toBottom: true, cells }]),
     });
     const rowId = result?.result?.[0]?.id;
-    const uploadedAttachments = rowId ? await uploadAttachments(rowId, payload.attachments) : [];
 
     return json(res, 201, {
       ok: true,
       sheetId: getSheetId(),
+      rowId,
       result,
-      uploadedAttachments,
       warning,
     });
   } catch (error) {
@@ -147,35 +137,3 @@ module.exports = async function handler(req, res) {
     });
   }
 };
-
-async function uploadAttachments(rowId, attachments) {
-  if (!attachments.length) return [];
-
-  const uploaded = [];
-  for (const attachment of attachments) {
-    const formData = new FormData();
-    const bytes = Buffer.from(attachment.dataBase64, "base64");
-    const blob = new Blob([bytes], { type: attachment.type || "application/octet-stream" });
-    formData.append("file", blob, attachment.name);
-
-    const response = await fetch(`https://api.smartsheet.com/2.0/sheets/${getSheetId()}/rows/${rowId}/attachments`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.SMARTSHEET_ACCESS_TOKEN || process.env.SMARTSHEET_TOKEN}`,
-      },
-      body: formData,
-    });
-    const data = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      const error = new Error(data?.message || `Errore caricamento allegato ${attachment.name}`);
-      error.statusCode = response.status;
-      error.details = data;
-      throw error;
-    }
-
-    uploaded.push(data);
-  }
-
-  return uploaded;
-}

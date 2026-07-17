@@ -260,7 +260,11 @@ let entryState = {
   functionalities: {},
   otherDetails: {},
 };
+let entryAttachmentFiles = [];
 let pendingEntryScrollPositions = {};
+
+const BROWSER_PREVIEW_EXTENSIONS = new Set(["PDF", "PNG", "JPG", "JPEG", "GIF", "WEBP", "TXT"]);
+const OFFICE_PREVIEW_EXTENSIONS = new Set(["DOC", "DOCX", "XLS", "XLSX", "PPT", "PPTX"]);
 
 const elements = {
   tipoFilters: document.querySelector("#tipo-filters"),
@@ -387,7 +391,7 @@ async function loadKnowledgeHub() {
 
   try {
     const response = await fetch("/api/smartsheet");
-    const data = await response.json();
+    const data = await parseApiResponse(response);
 
     if (!response.ok) {
       throw new Error(data.message || data.error || `Errore ${response.status}`);
@@ -876,7 +880,15 @@ function renderAttachments(attachments) {
   if (!attachments.length) return "";
 
   return `
-    <div class="detail-label with-gap">Allegati</div>
+    <div class="detail-label with-gap attachment-heading">
+      <span>Allegati</span>
+      <span class="attachment-info-wrap">
+        <button class="attachment-info-button" type="button" aria-label="Formati allegati supportati">i</button>
+        <span class="attachment-info-popover" role="tooltip">
+          L'anteprima e disponibile per i formati supportati dal browser o dal visualizzatore web: PDF, immagini PNG, JPG, JPEG, GIF, WEBP, file TXT e file Microsoft Office solo se il visualizzatore web riesce ad aprirli. Per gli altri file e disponibile il download quando Smartsheet fornisce un link valido.
+        </span>
+      </span>
+    </div>
     <div class="attachments-list">${attachments.map(attachmentTemplate).join("")}</div>
     <p class="attachment-note">Il link viene richiesto a Smartsheet al momento dell'apertura e puo essere temporaneo.</p>`;
 }
@@ -885,6 +897,15 @@ function attachmentTemplate(attachment) {
   const extension = fileExtension(attachment.name) || attachment.mimeType || attachment.attachmentType || "file";
   const size = attachment.sizeInKb ? `${Math.round(attachment.sizeInKb)} KB` : "";
   const meta = [extension, size].filter(Boolean).join(" - ");
+  const previewMode = previewModeForAttachment(attachment);
+  const canPreview = Boolean(attachment.id && previewMode);
+  const canDownload = Boolean(attachment.id);
+  const actions = [
+    canPreview
+      ? `<button class="attachment-link" type="button" data-preview-attachment-id="${escAttr(attachment.id)}" data-preview-mode="${escAttr(previewMode)}">Anteprima</button>`
+      : "",
+    canDownload ? `<button class="attachment-link" type="button" data-download-attachment-id="${escAttr(attachment.id)}">Scarica</button>` : "",
+  ].filter(Boolean);
 
   return `
     <div class="attachment-item">
@@ -892,20 +913,17 @@ function attachmentTemplate(attachment) {
         <span class="attachment-icon">file</span>
         <div>
           ${
-            attachment.id
-              ? `<button class="attachment-name attachment-name-button" type="button" data-preview-attachment-id="${escAttr(attachment.id)}">${escHtml(attachment.name || "Allegato")}</button>`
+            canPreview
+              ? `<button class="attachment-name attachment-name-button" type="button" data-preview-attachment-id="${escAttr(attachment.id)}" data-preview-mode="${escAttr(previewMode)}">${escHtml(attachment.name || "Allegato")}</button>`
               : `<div class="attachment-name">${escHtml(attachment.name || "Allegato")}</div>`
           }
           ${meta ? `<div class="attachment-meta">${escHtml(meta)}</div>` : ""}
         </div>
       </div>
       ${
-        attachment.id
-          ? `<div class="attachment-actions">
-              <button class="attachment-link" type="button" data-preview-attachment-id="${escAttr(attachment.id)}">Anteprima</button>
-              <button class="attachment-link" type="button" data-download-attachment-id="${escAttr(attachment.id)}">Scarica</button>
-            </div>`
-          : `<span class="attachment-unavailable">Allegato presente, ma ID non disponibile.</span>`
+        actions.length
+          ? `<div class="attachment-actions">${actions.join("")}</div>`
+          : `<span class="attachment-unavailable">Azioni non disponibili per questo allegato.</span>`
       }
     </div>`;
 }
@@ -915,10 +933,27 @@ function fileExtension(name) {
   return match ? match[1].toUpperCase() : "";
 }
 
+function previewModeForAttachment(attachment) {
+  if (!attachment?.id) return "";
+  const extension = fileExtension(attachment.name);
+  if (BROWSER_PREVIEW_EXTENSIONS.has(extension)) return "browser";
+  if (OFFICE_PREVIEW_EXTENSIONS.has(extension)) return "office";
+  return "";
+}
+
 function previewAttachment(button) {
   const attachmentId = button.dataset.previewAttachmentId;
   if (!attachmentId) return;
-  window.open(`/api/attachment?attachmentId=${encodeURIComponent(attachmentId)}&mode=preview`, "_blank", "noopener,noreferrer");
+  const previewUrl = `/api/attachment?attachmentId=${encodeURIComponent(attachmentId)}&mode=preview`;
+
+  if (button.dataset.previewMode === "office") {
+    const absolutePreviewUrl = new URL(previewUrl, window.location.origin).href;
+    const officeViewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(absolutePreviewUrl)}`;
+    window.open(officeViewerUrl, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  window.open(previewUrl, "_blank", "noopener,noreferrer");
 }
 
 async function downloadAttachment(button) {
@@ -1039,6 +1074,7 @@ function resetEntryState() {
     functionalities: {},
     otherDetails: {},
   };
+  entryAttachmentFiles = [];
 }
 
 function renderEntryForm(preserveValues = {}) {
@@ -1227,8 +1263,11 @@ function renderDetailSection(desc, query) {
         </div>
         <div class="file-upload-control">
           <input class="file-upload-input" id="entryAttachments" type="file" name="attachments" multiple />
-          <label class="file-upload-button" for="entryAttachments">Scegli file</label>
+          <label class="file-upload-button" for="entryAttachments">Aggiungi file</label>
           <span class="file-upload-name" id="entryAttachmentNames">Nessun file selezionato</span>
+        </div>
+        <div class="selected-attachments-list" id="entrySelectedAttachments">
+          ${renderSelectedEntryAttachments()}
         </div>
       </label>
     </section>`;
@@ -1288,6 +1327,9 @@ function bindEntryFormEvents() {
 
   const attachmentInput = elements.entryForm.querySelector("[name='attachments']");
   attachmentInput?.addEventListener("change", updateAttachmentNames);
+  elements.entryForm.querySelectorAll("[data-remove-entry-attachment]").forEach((button) => {
+    button.addEventListener("click", () => removeEntryAttachment(Number(button.dataset.removeEntryAttachment)));
+  });
 }
 
 function captureEntryScrollPositions() {
@@ -1318,11 +1360,59 @@ function preserveEntryValues() {
 
 function updateAttachmentNames() {
   const input = elements.entryForm.querySelector("[name='attachments']");
-  const label = elements.entryForm.querySelector("#entryAttachmentNames");
-  if (!input || !label) return;
+  if (!input) return;
 
-  const names = [...input.files].map((file) => file.name);
-  label.textContent = names.length ? names.join(", ") : "Nessun file selezionato";
+  [...input.files].forEach((file) => {
+    const duplicate = entryAttachmentFiles.some((currentFile) => currentFile.name === file.name && currentFile.size === file.size);
+    if (!duplicate) entryAttachmentFiles.push(file);
+  });
+
+  input.value = "";
+  refreshSelectedEntryAttachments();
+}
+
+function removeEntryAttachment(index) {
+  if (!Number.isInteger(index) || index < 0 || index >= entryAttachmentFiles.length) return;
+  entryAttachmentFiles.splice(index, 1);
+  refreshSelectedEntryAttachments();
+}
+
+function refreshSelectedEntryAttachments() {
+  const label = elements.entryForm.querySelector("#entryAttachmentNames");
+  const list = elements.entryForm.querySelector("#entrySelectedAttachments");
+  if (label) {
+    label.textContent = entryAttachmentFiles.length
+      ? `${entryAttachmentFiles.length} file selezionati`
+      : "Nessun file selezionato";
+  }
+  if (list) {
+    list.innerHTML = renderSelectedEntryAttachments();
+    list.querySelectorAll("[data-remove-entry-attachment]").forEach((button) => {
+      button.addEventListener("click", () => removeEntryAttachment(Number(button.dataset.removeEntryAttachment)));
+    });
+  }
+}
+
+function renderSelectedEntryAttachments() {
+  if (!entryAttachmentFiles.length) return "";
+
+  return entryAttachmentFiles
+    .map(
+      (file, index) => `
+        <div class="selected-attachment-item">
+          <span class="selected-attachment-name">${escHtml(file.name)}</span>
+          <span class="selected-attachment-size">${formatFileSize(file.size)}</span>
+          <button class="selected-attachment-remove" type="button" data-remove-entry-attachment="${index}">Rimuovi</button>
+        </div>`,
+    )
+    .join("");
+}
+
+function formatFileSize(bytes) {
+  const value = Number(bytes) || 0;
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${value} B`;
 }
 
 function pruneFunctionalityState(selectedTools, valuesByTool) {
@@ -1349,7 +1439,6 @@ function entryPayloadFromForm() {
   const preserved = preserveEntryValues();
   const desc = elements.entryForm.querySelector("[name='desc']")?.value.trim() || "";
   const query = elements.entryForm.querySelector("[name='query']")?.value.trim() || "";
-  const files = [...(elements.entryForm.querySelector("[name='attachments']")?.files || [])];
   const normalizedTools = entryState.tools.map(normalizedToolName);
 
   return {
@@ -1363,7 +1452,7 @@ function entryPayloadFromForm() {
     otherDetails: entryState.otherDetails,
     desc,
     query,
-    attachmentNames: files.map((file) => file.name),
+    attachmentNames: entryAttachmentFiles.map((file) => file.name),
     tag: buildEntryTags(entryState.tools),
     tagRicerca: entryState.infoType,
   };
@@ -1424,52 +1513,91 @@ async function submitEntryForm(event) {
   elements.entrySubmit.disabled = true;
   elements.entrySubmit.textContent = "Invio...";
   setEntryFormFeedback("Invio della nuova informazione a Smartsheet...", "info");
+  let keepSubmitDisabled = false;
 
   try {
-    payload.attachments = await readEntryAttachments();
     const response = await fetch("/api/smartsheet-create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await response.json();
+    const data = await parseApiResponse(response);
 
     if (!response.ok) {
       throw new Error(data.message || data.error || `Errore ${response.status}`);
     }
 
-    setEntryFormFeedback("Informazione inserita correttamente.", "success");
-    showToast("Nuova informazione salvata in Smartsheet");
+    const rowId = data.rowId || data.result?.result?.[0]?.id;
+    const uploadResults = rowId && entryAttachmentFiles.length ? await uploadEntryAttachments(rowId) : [];
+    const failedUploads = uploadResults.filter((item) => !item.ok);
+    const successfulUploads = uploadResults.filter((item) => item.ok);
+
+    if (failedUploads.length) {
+      const failedNames = failedUploads.map((item) => item.fileName).join(", ");
+      const message = `Informazione inserita. Allegati caricati: ${successfulUploads.length}/${uploadResults.length}. Non caricati: ${failedNames}.`;
+      setEntryFormFeedback(message, "error");
+      showToast("Informazione salvata, ma alcuni allegati non sono stati caricati");
+      keepSubmitDisabled = true;
+      elements.entrySubmit.textContent = "Inserimento salvato";
+    } else {
+      setEntryFormFeedback("Informazione inserita correttamente.", "success");
+      showToast(entryAttachmentFiles.length ? "Nuova informazione e allegati salvati in Smartsheet" : "Nuova informazione salvata in Smartsheet");
+    }
+
     await loadKnowledgeHub();
-    closeEntryModal();
+    if (!failedUploads.length) closeEntryModal();
   } catch (error) {
     setEntryFormFeedback(error.message || "Impossibile salvare la nuova informazione.", "error");
   } finally {
-    elements.entrySubmit.disabled = false;
-    elements.entrySubmit.textContent = "Invia";
+    if (!keepSubmitDisabled) {
+      elements.entrySubmit.disabled = false;
+      elements.entrySubmit.textContent = "Invia";
+    }
   }
 }
 
-function readEntryAttachments() {
-  const files = [...(elements.entryForm.querySelector("[name='attachments']")?.files || [])];
-  return Promise.all(
-    files.map(
-      (file) =>
-        new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const result = String(reader.result || "");
-            resolve({
-              name: file.name,
-              type: file.type || "application/octet-stream",
-              dataBase64: result.includes(",") ? result.split(",").pop() : result,
-            });
-          };
-          reader.onerror = () => reject(reader.error || new Error("Impossibile leggere l'allegato."));
-          reader.readAsDataURL(file);
-        }),
-    ),
-  );
+async function uploadEntryAttachments(rowId) {
+  const results = [];
+
+  for (const file of entryAttachmentFiles) {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+
+    try {
+      const response = await fetch(`/api/row-attachment?rowId=${encodeURIComponent(rowId)}`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await parseApiResponse(response);
+      results.push({
+        ok: response.ok,
+        fileName: file.name,
+        data,
+        message: data.message || data.error || "",
+      });
+    } catch (error) {
+      results.push({
+        ok: false,
+        fileName: file.name,
+        message: error.message || "Errore caricamento allegato.",
+      });
+    }
+  }
+
+  return results;
+}
+
+async function parseApiResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  return {
+    error: "NON_JSON_RESPONSE",
+    message: text || `Errore ${response.status}`,
+  };
 }
 
 function highlight(text, term) {
