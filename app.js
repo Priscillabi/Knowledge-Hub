@@ -264,7 +264,7 @@ let entryAttachmentFiles = [];
 let pendingEntryScrollPositions = {};
 
 const IMAGE_PREVIEW_EXTENSIONS = new Set(["JPG", "JPEG", "PNG", "GIF", "WEBP"]);
-const MAX_DIRECT_ATTACHMENT_BYTES = 30 * 1024 * 1024;
+const MAX_DIRECT_ATTACHMENT_BYTES = 4.2 * 1024 * 1024;
 
 const elements = {
   tipoFilters: document.querySelector("#tipo-filters"),
@@ -1243,7 +1243,7 @@ function renderDetailSection(desc, query) {
         <span>File Upload</span>
         <div class="field-help">
           <p>Allegare eventuale documentazione a supporto.</p>
-          <p>È possibile caricare file con una dimensione massima di 30 MB ciascuno. Per file di dimensioni superiori, si consiglia di comprimerli in formato .zip prima del caricamento.</p>
+          <p>È possibile caricare dal sito file con una dimensione massima di 4,2 MB ciascuno. Per file più grandi, caricare l'allegato direttamente in Smartsheet oppure ridurlo/comprimerlo prima del caricamento.</p>
         </div>
         <div class="file-upload-control">
           <input class="file-upload-input" id="entryAttachments" type="file" name="attachments" multiple />
@@ -1477,7 +1477,7 @@ function validateEntryPayload(payload) {
 
   const oversizedFiles = entryAttachmentFiles.filter((file) => file.size > MAX_DIRECT_ATTACHMENT_BYTES);
   if (oversizedFiles.length) {
-    return `Gli allegati possono pesare al massimo 30 MB ciascuno. Rimuovi o riduci: ${oversizedFiles.map((file) => file.name).join(", ")}.`;
+    return `Gli allegati caricati dal sito possono pesare al massimo 4,2 MB ciascuno. Rimuovi o riduci: ${oversizedFiles.map((file) => file.name).join(", ")}.`;
   }
 
   return "";
