@@ -1,7 +1,7 @@
 const { getSheetId, json } = require("./_smartsheet");
 
 const SMARTSHEET_API_BASE = "https://api.smartsheet.com/2.0";
-const MAX_ATTACHMENT_BYTES = 4.2 * 1024 * 1024;
+const MAX_ATTACHMENT_BYTES = 30 * 1024 * 1024;
 
 const MIME_BY_EXTENSION = {
   ppt: "application/vnd.ms-powerpoint",
@@ -17,6 +17,7 @@ const MIME_BY_EXTENSION = {
   jpeg: "image/jpeg",
   gif: "image/gif",
   webp: "image/webp",
+  zip: "application/zip",
 };
 
 module.exports = async function handler(req, res) {
@@ -99,7 +100,7 @@ function validateFile(file) {
   }
 
   if (file.bytes.length > MAX_ATTACHMENT_BYTES) {
-    const error = new Error(`Il file "${file.name}" supera il limite di 4,2 MB per allegato caricato dal sito.`);
+    const error = new Error(`Il file "${file.name}" supera il limite di 30 MB per allegato.`);
     error.statusCode = 413;
     throw error;
   }

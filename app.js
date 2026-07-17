@@ -263,9 +263,8 @@ let entryState = {
 let entryAttachmentFiles = [];
 let pendingEntryScrollPositions = {};
 
-const BROWSER_PREVIEW_EXTENSIONS = new Set(["PDF", "PNG", "JPG", "JPEG", "GIF", "WEBP", "TXT"]);
-const OFFICE_PREVIEW_EXTENSIONS = new Set(["DOC", "DOCX", "XLS", "XLSX", "PPT", "PPTX"]);
-const MAX_DIRECT_ATTACHMENT_BYTES = 4.2 * 1024 * 1024;
+const IMAGE_PREVIEW_EXTENSIONS = new Set(["JPG", "JPEG", "PNG", "GIF", "WEBP"]);
+const MAX_DIRECT_ATTACHMENT_BYTES = 30 * 1024 * 1024;
 
 const elements = {
   tipoFilters: document.querySelector("#tipo-filters"),
@@ -881,15 +880,7 @@ function renderAttachments(attachments) {
   if (!attachments.length) return "";
 
   return `
-    <div class="detail-label with-gap attachment-heading">
-      <span>Allegati</span>
-      <span class="attachment-info-wrap">
-        <button class="attachment-info-button" type="button" aria-label="Formati allegati supportati">i</button>
-        <span class="attachment-info-popover" role="tooltip">
-          L'anteprima e disponibile per i formati supportati dal browser o dal visualizzatore web: PDF, immagini PNG, JPG, JPEG, GIF, WEBP, file TXT e file Microsoft Office solo se il visualizzatore web riesce ad aprirli. Per gli altri file e disponibile il download quando Smartsheet fornisce un link valido.
-        </span>
-      </span>
-    </div>
+    <div class="detail-label with-gap">Allegati</div>
     <div class="attachments-list">${attachments.map(attachmentTemplate).join("")}</div>
     <p class="attachment-note">Il link viene richiesto a Smartsheet al momento dell'apertura e puo essere temporaneo.</p>`;
 }
@@ -903,7 +894,7 @@ function attachmentTemplate(attachment) {
   const canDownload = Boolean(attachment.id);
   const actions = [
     canPreview
-      ? `<button class="attachment-link" type="button" data-preview-attachment-id="${escAttr(attachment.id)}" data-preview-mode="${escAttr(previewMode)}" data-preview-filename="${escAttr(attachment.name || "allegato")}">Anteprima</button>`
+      ? `<button class="attachment-link" type="button" data-preview-attachment-id="${escAttr(attachment.id)}">Anteprima</button>`
       : "",
     canDownload ? `<button class="attachment-link" type="button" data-download-attachment-id="${escAttr(attachment.id)}">Scarica</button>` : "",
   ].filter(Boolean);
@@ -915,7 +906,7 @@ function attachmentTemplate(attachment) {
         <div>
           ${
             canPreview
-              ? `<button class="attachment-name attachment-name-button" type="button" data-preview-attachment-id="${escAttr(attachment.id)}" data-preview-mode="${escAttr(previewMode)}" data-preview-filename="${escAttr(attachment.name || "allegato")}">${escHtml(attachment.name || "Allegato")}</button>`
+              ? `<button class="attachment-name attachment-name-button" type="button" data-preview-attachment-id="${escAttr(attachment.id)}">${escHtml(attachment.name || "Allegato")}</button>`
               : `<div class="attachment-name">${escHtml(attachment.name || "Allegato")}</div>`
           }
           ${meta ? `<div class="attachment-meta">${escHtml(meta)}</div>` : ""}
@@ -937,8 +928,7 @@ function fileExtension(name) {
 function previewModeForAttachment(attachment) {
   if (!attachment?.id) return "";
   const extension = fileExtension(attachment.name);
-  if (BROWSER_PREVIEW_EXTENSIONS.has(extension)) return "browser";
-  if (OFFICE_PREVIEW_EXTENSIONS.has(extension)) return "office";
+  if (IMAGE_PREVIEW_EXTENSIONS.has(extension)) return "image";
   return "";
 }
 
@@ -946,16 +936,6 @@ function previewAttachment(button) {
   const attachmentId = button.dataset.previewAttachmentId;
   if (!attachmentId) return;
   const previewUrl = `/api/attachment?attachmentId=${encodeURIComponent(attachmentId)}&mode=preview`;
-
-  if (button.dataset.previewMode === "office") {
-    const fileName = button.dataset.previewFilename || `allegato.${fileExtension(button.dataset.previewFilename) || "docx"}`;
-    const officePreviewUrl = `/api/attachment-file/${encodeURIComponent(attachmentId)}/${encodeURIComponent(fileName)}`;
-    const absolutePreviewUrl = new URL(officePreviewUrl, window.location.origin).href;
-    const officeViewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(absolutePreviewUrl)}`;
-    window.open(officeViewerUrl, "_blank", "noopener,noreferrer");
-    return;
-  }
-
   window.open(previewUrl, "_blank", "noopener,noreferrer");
 }
 
@@ -1263,6 +1243,7 @@ function renderDetailSection(desc, query) {
         <span>File Upload</span>
         <div class="field-help">
           <p>Allegare eventuale documentazione a supporto.</p>
+          <p>È possibile caricare file con una dimensione massima di 30 MB ciascuno. Per file di dimensioni superiori, si consiglia di comprimerli in formato .zip prima del caricamento.</p>
         </div>
         <div class="file-upload-control">
           <input class="file-upload-input" id="entryAttachments" type="file" name="attachments" multiple />
@@ -1496,7 +1477,7 @@ function validateEntryPayload(payload) {
 
   const oversizedFiles = entryAttachmentFiles.filter((file) => file.size > MAX_DIRECT_ATTACHMENT_BYTES);
   if (oversizedFiles.length) {
-    return `Gli allegati caricati dal sito possono pesare al massimo 4,2 MB ciascuno per il limite tecnico di Vercel. Rimuovi o riduci: ${oversizedFiles.map((file) => file.name).join(", ")}.`;
+    return `Gli allegati possono pesare al massimo 30 MB ciascuno. Rimuovi o riduci: ${oversizedFiles.map((file) => file.name).join(", ")}.`;
   }
 
   return "";

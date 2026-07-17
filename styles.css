@@ -1615,6 +1615,60 @@ textarea {
   white-space: nowrap;
 }
 
+.selected-attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.selected-attachment-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface2);
+}
+
+.selected-attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-attachment-size {
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.selected-attachment-remove {
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  padding: 5px 9px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.selected-attachment-remove:hover,
+.selected-attachment-remove:focus-visible {
+  border-color: var(--coral);
+  background: var(--coral);
+  color: #fff;
+  outline: none;
+}
+
 .form-feedback {
   min-height: 22px;
   margin-top: 16px;
