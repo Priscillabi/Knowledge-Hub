@@ -1,6 +1,6 @@
 let db = [];
 let activeTipo = "all";
-let activeTool = "all";
+let activeTools = [];
 let activeFacets = {};
 let searchTerm = "";
 let technicalFiltersUnlocked = false;
@@ -407,7 +407,7 @@ async function loadKnowledgeHub() {
 
     db = (data.sheet?.entries || []).map(normalizeEntry);
     activeTipo = "all";
-    activeTool = "all";
+    activeTools = [];
     activeFacets = {};
     technicalFiltersUnlocked = false;
     searchTerm = "";
@@ -473,9 +473,9 @@ function buildFilters() {
 
   const tools = uniqueVals("strumento");
   elements.toolFilters.innerHTML = [
-    filterButton("tool", "all", "Tutti", "#A09A91", db.length, activeTool === "all"),
+    filterButton("tool", "all", "Tutti", "#A09A91", db.length, activeTools.length === 0),
     ...tools.map((tool) =>
-      filterButton("tool", tool, tool, toolColor(tool), db.filter((item) => itemHasSplitValue(item, "strumento", tool)).length, activeTool === tool),
+      filterButton("tool", tool, tool, toolColor(tool), db.filter((item) => itemHasSplitValue(item, "strumento", tool)).length, activeTools.includes(tool)),
     ),
   ].join("");
 
@@ -492,7 +492,7 @@ function buildFilters() {
 
   document.querySelectorAll("[data-tool]").forEach((button) => {
     button.addEventListener("click", () => {
-      activeTool = button.dataset.tool;
+      toggleToolSelection(button.dataset.tool);
       technicalFiltersUnlocked = true;
       pruneHiddenFacetSelections();
       buildFilters();
@@ -520,10 +520,24 @@ function buildFacetSections() {
     .join("");
 }
 
-function visibleFacetConfigs() {
-  if (activeTool === "all") return FACET_CONFIG;
+function toggleToolSelection(tool) {
+  if (tool === "all") {
+    activeTools = [];
+    return;
+  }
 
-  return FACET_CONFIG.filter((config) => toolMatchesFacetSection(activeTool, config.sectionName));
+  if (activeTools.includes(tool)) {
+    activeTools = activeTools.filter((item) => item !== tool);
+    return;
+  }
+
+  activeTools = [...activeTools, tool];
+}
+
+function visibleFacetConfigs() {
+  if (!activeTools.length) return FACET_CONFIG;
+
+  return FACET_CONFIG.filter((config) => activeTools.some((tool) => toolMatchesFacetSection(tool, config.sectionName)));
 }
 
 function toolMatchesFacetSection(tool, sectionName) {
@@ -533,7 +547,7 @@ function toolMatchesFacetSection(tool, sectionName) {
 }
 
 function pruneHiddenFacetSelections() {
-  if (activeTool === "all") return;
+  if (!activeTools.length) return;
 
   const visibleSections = new Set(visibleFacetConfigs().map((config) => config.sectionName));
   activeFacets = Object.fromEntries(Object.entries(activeFacets).filter(([sectionName]) => visibleSections.has(sectionName)));
@@ -576,9 +590,13 @@ function getSelectedFacetValues(sectionName) {
 function clearFilter(kind, sectionName = "", value = "") {
   if (kind === "tipo") activeTipo = "all";
   if (kind === "tool") {
-    activeTool = "all";
-    activeFacets = {};
-    technicalFiltersUnlocked = false;
+    activeTools = value ? activeTools.filter((tool) => tool !== value) : [];
+    if (!activeTools.length) {
+      activeFacets = {};
+      technicalFiltersUnlocked = false;
+    } else {
+      pruneHiddenFacetSelections();
+    }
   }
   if (kind === "facet") toggleFacetSelection(sectionName, value);
 
@@ -589,7 +607,7 @@ function clearFilter(kind, sectionName = "", value = "") {
 
 function clearAllFilters() {
   activeTipo = "all";
-  activeTool = "all";
+  activeTools = [];
   activeFacets = {};
   technicalFiltersUnlocked = false;
   elements.searchInput.value = "";
@@ -640,8 +658,8 @@ function getFiltered() {
     items = items.filter((item) => itemHasSplitValue(item, "tipo", activeTipo));
   }
 
-  if (activeTool !== "all") {
-    items = items.filter((item) => itemHasSplitValue(item, "strumento", activeTool));
+  if (activeTools.length) {
+    items = items.filter((item) => activeTools.every((tool) => itemHasSplitValue(item, "strumento", tool)));
   }
 
   Object.entries(activeFacets).forEach(([sectionName, values]) => {
@@ -693,18 +711,32 @@ function normalizeSearchText(value) {
 }
 
 function updateStats() {
-  const tools = new Set(db.flatMap((item) => splitValues(item.strumento))).size;
-  const tipoStats = [
-    { label: "Best Practice", count: db.filter((item) => itemHasSplitValue(item, "tipo", "Best Practice")).length, color: tipoColor("Best Practice") },
-    { label: "Elemento tecnico", count: db.filter((item) => itemHasSplitValue(item, "tipo", "Elemento tecnico")).length, color: tipoColor("Elemento tecnico") },
-    { label: "Issue - Workaround", count: db.filter((item) => itemHasSplitValue(item, "tipo", "Issue - Workaround")).length, color: tipoColor("Issue - Workaround") },
-  ];
+  const tipoStats = tipoDistribution();
+  const toolStats = toolDistribution();
+  const heatmap = toolTipoHeatmap(toolStats, tipoStats);
   const maxTipoCount = Math.max(...tipoStats.map((item) => item.count), 1);
+  const maxToolCount = Math.max(...toolStats.map((item) => item.count), 1);
 
   elements.statsBar.innerHTML = `
-    <section class="stats-summary" aria-label="Totale informazioni inserite">
+    <div class="overview-head">
+      <div>
+        <h2>Panoramica della Knowledge Base</h2>
+        <p>Riepilogo aggiornato delle informazioni presenti nel database.</p>
+      </div>
+    </div>
+    <div class="overview-grid">
+    <section class="stats-summary" aria-label="Riepilogo generale">
+      <span class="stat-label">Riepilogo generale</span>
+      <div class="stat-summary-items">
+        <div>
         <span class="stat-label">Totale informazioni inserite</span>
         <strong>${db.length}</strong>
+        </div>
+        <div>
+          <span class="stat-label">Totale strumenti</span>
+          <strong>${toolStats.length}</strong>
+        </div>
+      </div>
     </section>
     <section class="stats-chart" aria-label="Distribuzione informazioni per tipologia">
       <div class="stat-chart-head">
@@ -714,17 +746,28 @@ function updateStats() {
         ${tipoStats.map((item) => chartBarTemplate(item, maxTipoCount)).join("")}
       </div>
     </section>
-    <section class="stats-tools" aria-label="Totale strumenti">
-      <span class="stat-label">Totale strumenti</span>
-      <strong>${tools}</strong>
-    </section>`;
+    <section class="stats-chart stats-tool-chart" aria-label="Informazioni per strumento">
+      <div class="stat-chart-head">
+        <span class="stat-label">Informazioni per strumento</span>
+      </div>
+      <div class="stat-chart-bars tool-chart-bars">
+        ${toolStats.map((item) => chartBarTemplate(item, maxToolCount)).join("")}
+      </div>
+    </section>
+    <section class="stats-heatmap" aria-label="Distribuzione per strumento e tipologia">
+      <div class="stat-chart-head">
+        <span class="stat-label">Distribuzione per strumento e tipologia</span>
+      </div>
+      ${heatmapTemplate(heatmap)}
+    </section>
+    </div>`;
 }
 
 function chartBarTemplate(item, maxCount) {
   const width = Math.max((item.count / maxCount) * 100, item.count ? 8 : 0);
 
   return `
-    <div class="stat-chart-row">
+    <div class="stat-chart-row" title="${escAttr(item.label)}: ${item.count} informazioni">
       <div class="stat-chart-row-head">
         <span>${escHtml(item.label)}</span>
         <strong>${item.count}</strong>
@@ -735,6 +778,78 @@ function chartBarTemplate(item, maxCount) {
     </div>`;
 }
 
+function tipoDistribution() {
+  return uniqueVals("tipo").map((tipo) => ({
+    label: tipo,
+    count: db.filter((item) => itemHasSplitValue(item, "tipo", tipo)).length,
+    color: tipoColor(tipo),
+  }));
+}
+
+function toolDistribution() {
+  const counts = new Map();
+
+  db.forEach((item) => {
+    splitValues(item.strumento).forEach((tool) => {
+      counts.set(tool, (counts.get(tool) || 0) + 1);
+    });
+  });
+
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count, color: toolColor(label) }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+function toolTipoHeatmap(toolStats, tipoStats) {
+  const rows = toolStats.map((tool) => ({
+    tool: tool.label,
+    total: tool.count,
+    values: tipoStats.map((tipo) => ({
+      tipo: tipo.label,
+      count: db.filter((item) => itemHasSplitValue(item, "strumento", tool.label) && itemHasSplitValue(item, "tipo", tipo.label)).length,
+    })),
+  }));
+  const maxCell = Math.max(...rows.flatMap((row) => row.values.map((item) => item.count)), 1);
+
+  return {
+    tipos: tipoStats.map((tipo) => tipo.label),
+    rows,
+    maxCell,
+  };
+}
+
+function heatmapTemplate(heatmap) {
+  if (!heatmap.rows.length || !heatmap.tipos.length) {
+    return `<div class="heatmap-empty">Dati non disponibili.</div>`;
+  }
+
+  return `
+    <div class="heatmap-scroll">
+      <div class="heatmap-grid" style="grid-template-columns:minmax(140px, 1.2fr) repeat(${heatmap.tipos.length}, minmax(82px, 1fr));">
+        <div class="heatmap-corner">Strumento</div>
+        ${heatmap.tipos.map((tipo) => `<div class="heatmap-head">${escHtml(tipo)}</div>`).join("")}
+        ${heatmap.rows.map((row) => heatmapRowTemplate(row, heatmap.maxCell)).join("")}
+      </div>
+    </div>`;
+}
+
+function heatmapRowTemplate(row, maxCell) {
+  return `
+    <div class="heatmap-tool">${escHtml(row.tool)}</div>
+    ${row.values.map((value) => heatmapCellTemplate(row.tool, value, maxCell)).join("")}`;
+}
+
+function heatmapCellTemplate(tool, value, maxCell) {
+  const intensity = value.count ? 0.12 + (value.count / maxCell) * 0.68 : 0;
+  const background = value.count ? `rgba(241, 53, 87, ${intensity.toFixed(2)})` : "rgba(237, 240, 244, 0.72)";
+  const color = intensity > 0.45 ? "#fff" : "var(--navy)";
+
+  return `
+    <div class="heatmap-cell" style="background:${background};color:${color}" title="${escAttr(tool)} - ${escAttr(value.tipo)}: ${value.count} informazioni">
+      ${value.count}
+    </div>`;
+}
+
 function activeFilterChips() {
   const chips = [];
 
@@ -742,9 +857,9 @@ function activeFilterChips() {
     chips.push({ label: `Tipologia: ${activeTipo}`, kind: "tipo" });
   }
 
-  if (activeTool !== "all") {
-    chips.push({ label: `Strumento: ${activeTool}`, kind: "tool" });
-  }
+  activeTools.forEach((tool) => {
+    chips.push({ label: `Strumento: ${tool}`, kind: "tool", value: tool });
+  });
 
   Object.entries(activeFacets).forEach(([sectionName, values]) => {
     values.forEach((value) => {
@@ -812,11 +927,16 @@ function render() {
 
   const filtered = getFiltered();
   elements.mainArea.innerHTML = `
+    <section class="browse-section" aria-label="Informazioni disponibili">
     <div class="content-header">
-      <div class="results-info" id="resultsInfo"></div>
+      <div>
+        <h2>Informazioni disponibili</h2>
+        <div class="results-info" id="resultsInfo"></div>
+      </div>
       <div class="sort-wrap">Ordinamento: <strong>Piu recente</strong></div>
     </div>
-    <div class="cards" id="cards"></div>`;
+    <div class="cards" id="cards"></div>
+    </section>`;
 
   document.querySelector("#resultsInfo").innerHTML = searchTerm
     ? `<strong>${filtered.length}</strong> risultati per "<strong>${escHtml(searchTerm)}</strong>"`
@@ -879,7 +999,7 @@ function cardTemplate(item, index) {
       </div>
       ${item.desc ? `<p class="card-summary">${highlight(item.desc, searchTerm)}</p>` : ""}
       <div class="card-meta">
-        ${item.tag ? `<span class="meta-item">Tag: ${escHtml(item.tag)}</span>` : ""}
+        ${renderTagChips(item.tag)}
         ${item.autore ? `<span class="meta-item">Autore: ${escHtml(item.autore.split("@")[0])}</span>` : ""}
         ${item.query ? `<span class="meta-item">Formula/Query presente</span>` : ""}
         <span class="meta-item">Data Inserimento: ${escHtml(formatDate(item.dataInserimento))}</span>
@@ -896,6 +1016,25 @@ function cardTemplate(item, index) {
         </div>
       </div>
     </article>`;
+}
+
+function renderTagChips(tags) {
+  const values = [];
+  const seen = new Set();
+
+  splitValues(tags).forEach((tag) => {
+    const key = normalizeSearchText(tag);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    values.push(tag);
+  });
+
+  if (!values.length) return "";
+
+  return `
+    <div class="meta-tags" aria-label="TAG">
+      ${values.map((tag) => `<span class="meta-tag">${escHtml(tag)}</span>`).join("")}
+    </div>`;
 }
 
 function renderTechnicalDetails(item) {
@@ -1718,7 +1857,7 @@ function openKnowledgeSource(id) {
   }
 
   activeTipo = "all";
-  activeTool = "all";
+  activeTools = [];
   activeFacets = {};
   technicalFiltersUnlocked = false;
   searchTerm = "";

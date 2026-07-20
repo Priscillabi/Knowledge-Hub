@@ -648,36 +648,74 @@ textarea {
 }
 
 .stats-bar {
+  margin: 16px 34px 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff, #f7f8fb);
+  box-shadow: var(--shadow-sm);
+}
+
+.overview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.overview-head h2 {
+  margin: 0 0 4px;
+  color: var(--navy);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.overview-head p {
+  margin: 0;
+  color: var(--soft);
+  font-size: 13px;
+}
+
+.overview-grid {
   display: grid;
-  grid-template-columns: minmax(150px, 0.32fr) minmax(260px, 1fr) minmax(150px, 0.32fr);
+  grid-template-columns: minmax(170px, 0.8fr) minmax(280px, 1.35fr) minmax(260px, 1.15fr);
   gap: 12px;
-  padding: 16px 34px 0;
 }
 
 .stats-summary,
 .stats-chart,
-.stats-tools {
+.stats-heatmap {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fff;
   box-shadow: var(--shadow-sm);
 }
 
-.stats-summary,
-.stats-tools {
+.stats-summary {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   justify-content: center;
-  gap: 6px;
-  min-height: 84px;
+  gap: 12px;
+  min-height: 112px;
   padding: 13px 15px;
-}
-
-.stats-summary {
   background:
     linear-gradient(135deg, rgba(42, 50, 124, 0.08), transparent),
     linear-gradient(180deg, #fff, #f9fafc);
+}
+
+.stat-summary-items {
+  display: grid;
+  gap: 10px;
+}
+
+.stat-summary-items div {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
 }
 
 .stat-label,
@@ -689,10 +727,9 @@ textarea {
   text-transform: uppercase;
 }
 
-.stats-summary strong,
-.stats-tools strong {
+.stats-summary strong {
   color: var(--navy);
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 800;
   line-height: 1;
 }
@@ -704,6 +741,12 @@ textarea {
   gap: 9px;
   min-height: 84px;
   padding: 13px 15px;
+}
+
+.stats-tool-chart .stat-chart-bars {
+  max-height: 166px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .stat-chart-head {
@@ -756,21 +799,78 @@ textarea {
   border-radius: inherit;
 }
 
-.stats-tools {
-  background:
-    linear-gradient(135deg, rgba(241, 53, 87, 0.08), transparent),
-    #fff;
-}
-
 .stat-helper {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
 
+.stats-heatmap {
+  grid-column: 1 / -1;
+  padding: 13px 15px 15px;
+}
+
+.heatmap-scroll {
+  overflow-x: auto;
+  margin-top: 10px;
+  padding-bottom: 2px;
+}
+
+.heatmap-grid {
+  min-width: 620px;
+  display: grid;
+  gap: 5px;
+}
+
+.heatmap-corner,
+.heatmap-head,
+.heatmap-tool,
+.heatmap-cell {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.heatmap-corner,
+.heatmap-head {
+  color: var(--soft);
+  font-weight: 900;
+}
+
+.heatmap-head {
+  justify-content: center;
+  text-align: center;
+}
+
+.heatmap-tool {
+  min-width: 0;
+  padding: 0 9px;
+  background: var(--surface2);
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.heatmap-cell {
+  justify-content: center;
+  font-weight: 900;
+}
+
+.heatmap-empty {
+  margin-top: 10px;
+  color: var(--soft);
+  font-size: 13px;
+}
+
 .content {
   flex: 1;
   padding: 22px 34px 36px;
+}
+
+.browse-section {
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
 }
 
 .active-filter-bar {
@@ -831,7 +931,15 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   margin-bottom: 16px;
+}
+
+.content-header h2 {
+  margin: 0 0 4px;
+  color: var(--navy);
+  font-size: 18px;
+  line-height: 1.2;
 }
 
 .results-info,
@@ -1030,6 +1138,23 @@ textarea {
 .meta-item {
   color: var(--soft);
   font-size: 12px;
+}
+
+.meta-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.meta-tag {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: var(--surface2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .card-detail {
@@ -1941,13 +2066,18 @@ textarea {
     display: none;
   }
 
-  .stats-bar {
+  .overview-grid {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
 
   .stats-chart {
+    grid-column: auto;
+    order: initial;
+  }
+
+  .stats-tool-chart,
+  .stats-heatmap {
     grid-column: 1 / -1;
-    order: 3;
   }
 }
 
@@ -2030,19 +2160,26 @@ textarea {
     margin-right: 16px;
   }
 
-  .stats-bar,
+  .stats-bar {
+    margin-left: 16px;
+    margin-right: 16px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
   .content {
     padding-left: 16px;
     padding-right: 16px;
   }
 
-  .stats-bar,
+  .overview-grid,
   .cards {
     grid-template-columns: 1fr;
   }
 
-  .stats-chart {
-    order: initial;
+  .stats-tool-chart,
+  .stats-heatmap {
+    grid-column: auto;
   }
 
   .content-header,
