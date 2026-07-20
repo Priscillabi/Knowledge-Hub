@@ -57,7 +57,6 @@
           <div class="topbar-right">
             <span class="file-badge" id="fileBadge">Smartsheet</span>
             <button class="btn btn-primary" id="new-entry-button" type="button">Nuova informazione</button>
-            <button class="btn btn-outline" id="export-button" type="button">Esporta JSON</button>
           </div>
         </header>
 
@@ -120,6 +119,24 @@
     </div>
 
     <div class="toast" id="toast"></div>
+    <button class="chat-launcher" id="chatLauncher" type="button" aria-label="Apri assistente AI">AI</button>
+    <section class="chat-panel" id="chatPanel" aria-hidden="true" aria-label="Assistente AI Knowledge Hub">
+      <div class="chat-head">
+        <div>
+          <p>Knowledge Hub AI</p>
+          <h2>Assistente know-how</h2>
+        </div>
+        <button class="chat-close" id="chatClose" type="button" aria-label="Chiudi assistente">x</button>
+      </div>
+      <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
+      <form class="chat-form" id="chatForm">
+        <textarea id="chatInput" rows="3" placeholder="Scrivi una domanda sul know-how aziendale..."></textarea>
+        <div class="chat-actions">
+          <button class="btn btn-outline" id="chatClear" type="button">Nuova chat</button>
+          <button class="btn btn-primary" type="submit">Invia</button>
+        </div>
+      </form>
+    </section>
     <script src="app.js"></script>
   </body>
 </html>

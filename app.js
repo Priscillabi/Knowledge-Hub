@@ -262,6 +262,7 @@ let entryState = {
 };
 let entryAttachmentFiles = [];
 let pendingEntryScrollPositions = {};
+let chatHistory = [];
 
 const IMAGE_PREVIEW_EXTENSIONS = new Set(["JPG", "JPEG", "PNG", "GIF", "WEBP"]);
 const MAX_DIRECT_ATTACHMENT_BYTES = 4.2 * 1024 * 1024;
@@ -290,6 +291,13 @@ const elements = {
   entryCancel: document.querySelector("#entryCancel"),
   entrySubmit: document.querySelector("#entrySubmit"),
   entryFormFeedback: document.querySelector("#entryFormFeedback"),
+  chatLauncher: document.querySelector("#chatLauncher"),
+  chatPanel: document.querySelector("#chatPanel"),
+  chatClose: document.querySelector("#chatClose"),
+  chatMessages: document.querySelector("#chatMessages"),
+  chatForm: document.querySelector("#chatForm"),
+  chatInput: document.querySelector("#chatInput"),
+  chatClear: document.querySelector("#chatClear"),
 };
 
 function toolColor(tool) {
@@ -641,9 +649,9 @@ function getFiltered() {
   });
 
   if (searchTerm) {
-    const term = searchTerm.toLowerCase();
+    const term = normalizeSearchText(searchTerm);
     items = items.filter((item) =>
-      searchableValues(item).some((value) => String(value || "").toLowerCase().includes(term)),
+      searchableValues(item).some((value) => normalizeSearchText(value).includes(term)),
     );
   }
 
@@ -659,6 +667,7 @@ function searchableValues(item) {
   const attachmentNames = item.attachments.map((attachment) => attachment.name);
 
   return [
+    item.title,
     item.displayTitle,
     item.desc,
     item.workaround,
@@ -674,29 +683,56 @@ function searchableValues(item) {
   ];
 }
 
+function normalizeSearchText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function updateStats() {
   const tools = new Set(db.flatMap((item) => splitValues(item.strumento))).size;
-  const countByTipo = (tipo) => db.filter((item) => itemHasSplitValue(item, "tipo", tipo)).length;
+  const tipoStats = [
+    { label: "Best Practice", count: db.filter((item) => itemHasSplitValue(item, "tipo", "Best Practice")).length, color: tipoColor("Best Practice") },
+    { label: "Elemento tecnico", count: db.filter((item) => itemHasSplitValue(item, "tipo", "Elemento tecnico")).length, color: tipoColor("Elemento tecnico") },
+    { label: "Issue - Workaround", count: db.filter((item) => itemHasSplitValue(item, "tipo", "Issue - Workaround")).length, color: tipoColor("Issue - Workaround") },
+  ];
+  const maxTipoCount = Math.max(...tipoStats.map((item) => item.count), 1);
 
   elements.statsBar.innerHTML = `
-    <section class="stats-total" aria-label="Totale informazioni inserite">
-      <div class="stat-main">
+    <section class="stats-summary" aria-label="Totale informazioni inserite">
         <span class="stat-label">Totale informazioni inserite</span>
         <strong>${db.length}</strong>
+    </section>
+    <section class="stats-chart" aria-label="Distribuzione informazioni per tipologia">
+      <div class="stat-chart-head">
+        <span class="stat-label">Distribuzione per tipologia</span>
       </div>
-      <div class="stat-breakdown">
-        <span class="stat-breakdown-label">di cui per tipologia</span>
-        <div class="stat-breakdown-items">
-          <div class="stat-chip"><strong>${countByTipo("Best Practice")}</strong><span>Best Practice</span></div>
-          <div class="stat-chip"><strong>${countByTipo("Elemento tecnico")}</strong><span>Elemento tecnico</span></div>
-          <div class="stat-chip"><strong>${countByTipo("Issue - Workaround")}</strong><span>Issue - Workaround</span></div>
-        </div>
+      <div class="stat-chart-bars">
+        ${tipoStats.map((item) => chartBarTemplate(item, maxTipoCount)).join("")}
       </div>
     </section>
     <section class="stats-tools" aria-label="Totale strumenti">
       <span class="stat-label">Totale strumenti</span>
       <strong>${tools}</strong>
     </section>`;
+}
+
+function chartBarTemplate(item, maxCount) {
+  const width = Math.max((item.count / maxCount) * 100, item.count ? 8 : 0);
+
+  return `
+    <div class="stat-chart-row">
+      <div class="stat-chart-row-head">
+        <span>${escHtml(item.label)}</span>
+        <strong>${item.count}</strong>
+      </div>
+      <div class="stat-chart-track" aria-hidden="true">
+        <span style="width:${width}%;background:${item.color}"></span>
+      </div>
+    </div>`;
 }
 
 function activeFilterChips() {
@@ -831,14 +867,17 @@ function cardTemplate(item, index) {
   return `
     <article class="card" id="card-${escAttr(item.id)}" data-id="${escAttr(item.id)}" style="animation-delay:${Math.min(index, 12) * 0.03}s">
       <div class="card-head">
-        <div class="card-title">${highlight(item.displayTitle, searchTerm)}</div>
-        <div class="card-badges">
-          ${item.tipo ? `<span class="badge ${tipoBadge(item.tipo)}">${escHtml(item.tipo)}</span>` : ""}
-          ${item.strumento ? `<span class="badge badge-tool" style="background:${toolColor(item.strumento)}1A;color:${toolColor(item.strumento)}">${escHtml(toolLabel)}</span>` : ""}
-          ${item.attachments.length ? `<span class="badge badge-attachment">${item.attachments.length} allegati</span>` : ""}
-          <span class="expand-icon">v</span>
+        <div class="card-title-wrap">
+          <div class="card-badges">
+            ${item.tipo ? `<span class="badge ${tipoBadge(item.tipo)}">${escHtml(item.tipo)}</span>` : ""}
+            ${item.strumento ? `<span class="badge badge-tool" style="background:${toolColor(item.strumento)}1A;color:${toolColor(item.strumento)}">${escHtml(toolLabel)}</span>` : ""}
+            ${item.attachments.length ? `<span class="badge badge-attachment">${item.attachments.length} allegati</span>` : ""}
+          </div>
+          <div class="card-title">${highlight(item.displayTitle, searchTerm)}</div>
         </div>
+        <span class="expand-icon">v</span>
       </div>
+      ${item.desc ? `<p class="card-summary">${highlight(item.desc, searchTerm)}</p>` : ""}
       <div class="card-meta">
         ${item.tag ? `<span class="meta-item">Tag: ${escHtml(item.tag)}</span>` : ""}
         ${item.autore ? `<span class="meta-item">Autore: ${escHtml(item.autore.split("@")[0])}</span>` : ""}
@@ -1589,6 +1628,158 @@ async function parseApiResponse(response) {
   };
 }
 
+function openChatPanel() {
+  elements.chatPanel?.classList.add("show");
+  elements.chatPanel?.setAttribute("aria-hidden", "false");
+  renderChatMessages();
+  window.setTimeout(() => elements.chatInput?.focus(), 80);
+}
+
+function closeChatPanel() {
+  elements.chatPanel?.classList.remove("show");
+  elements.chatPanel?.setAttribute("aria-hidden", "true");
+}
+
+function resetChat() {
+  chatHistory = [];
+  renderChatMessages();
+}
+
+function renderChatMessages(loading = false) {
+  if (!elements.chatMessages) return;
+
+  const intro = chatHistory.length
+    ? ""
+    : `<div class="chat-empty">Fai una domanda: usero prima la Knowledge Base aziendale e, se configurato, integrero con fonti esterne autorevoli.</div>`;
+
+  elements.chatMessages.innerHTML = `
+    ${intro}
+    ${chatHistory.map(chatMessageTemplate).join("")}
+    ${loading ? `<div class="chat-message assistant"><div class="chat-bubble">Sto cercando nella Knowledge Base...</div></div>` : ""}`;
+  elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+
+  elements.chatMessages.querySelectorAll("[data-chat-source-id]").forEach((button) => {
+    button.addEventListener("click", () => openKnowledgeSource(button.dataset.chatSourceId));
+  });
+}
+
+function chatMessageTemplate(message) {
+  const roleLabel = message.role === "user" ? "Tu" : "Knowledge Hub AI";
+  const sources = message.role === "assistant" ? renderChatSources(message) : "";
+
+  return `
+    <div class="chat-message ${message.role === "user" ? "user" : "assistant"}">
+      <div class="chat-role">${roleLabel}</div>
+      <div class="chat-bubble">${escHtml(message.content).replace(/\n/g, "<br>")}</div>
+      ${sources}
+    </div>`;
+}
+
+function renderChatSources(message) {
+  const internal = Array.isArray(message.internalSources) ? message.internalSources : [];
+  const external = Array.isArray(message.externalSources) ? message.externalSources : [];
+  if (!internal.length && !external.length) return "";
+
+  return `
+    <div class="chat-sources">
+      ${internal.length ? `<div class="chat-source-title">Fonti Knowledge Base</div>${internal.map(internalSourceTemplate).join("")}` : ""}
+      ${external.length ? `<div class="chat-source-title">Fonti esterne</div>${external.map(externalSourceTemplate).join("")}` : ""}
+    </div>`;
+}
+
+function internalSourceTemplate(source) {
+  return `
+    <button class="chat-source" type="button" data-chat-source-id="${escAttr(source.id)}">
+      <strong>${escHtml(source.title || "Risorsa Knowledge Hub")}</strong>
+      <span>${escHtml([source.tipo, source.strumento].filter(Boolean).join(" - "))}</span>
+      ${source.excerpt ? `<em>${escHtml(source.excerpt)}</em>` : ""}
+    </button>`;
+}
+
+function externalSourceTemplate(source) {
+  const title = source.title || source.source || source.url || "Fonte esterna";
+  const url = source.url || "";
+  if (!url) {
+    return `<div class="chat-source external"><strong>${escHtml(title)}</strong></div>`;
+  }
+
+  return `
+    <a class="chat-source external" href="${escAttr(url)}" target="_blank" rel="noopener noreferrer">
+      <strong>${escHtml(title)}</strong>
+      ${source.source ? `<span>${escHtml(source.source)}</span>` : ""}
+    </a>`;
+}
+
+function openKnowledgeSource(id) {
+  const item = db.find((entry) => String(entry.id) === String(id));
+  if (!item) {
+    showToast("Risorsa non trovata nella vista corrente");
+    return;
+  }
+
+  activeTipo = "all";
+  activeTool = "all";
+  activeFacets = {};
+  technicalFiltersUnlocked = false;
+  searchTerm = "";
+  elements.searchInput.value = "";
+  elements.searchClear.style.display = "none";
+  buildFilters();
+  renderActiveFilters();
+  render();
+
+  window.requestAnimationFrame(() => {
+    const card = document.querySelector(`#card-${cssEscape(id)}`);
+    if (!card) return;
+    card.classList.add("open");
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
+
+async function submitChatQuestion(event) {
+  event.preventDefault();
+
+  const question = elements.chatInput?.value.trim() || "";
+  if (!question) return;
+
+  chatHistory.push({ role: "user", content: question });
+  elements.chatInput.value = "";
+  renderChatMessages(true);
+
+  try {
+    const response = await fetch("/api/ai-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        history: chatHistory.filter((message) => message.role === "user" || message.role === "assistant").slice(-8),
+      }),
+    });
+    const data = await parseApiResponse(response);
+
+    if (!response.ok) {
+      throw new Error(data.message || data.error || `Errore ${response.status}`);
+    }
+
+    chatHistory.push({
+      role: "assistant",
+      content: data.answer || "Non ho trovato informazioni sufficienti per rispondere.",
+      internalSources: data.internalSources || [],
+      externalSources: data.externalSources || [],
+      usedWeb: Boolean(data.usedWeb),
+    });
+  } catch (error) {
+    chatHistory.push({
+      role: "assistant",
+      content: error.message || "Impossibile elaborare la domanda in questo momento.",
+      internalSources: [],
+      externalSources: [],
+    });
+  } finally {
+    renderChatMessages();
+  }
+}
+
 function highlight(text, term) {
   if (!term || !text) return escHtml(text || "");
 
@@ -1611,16 +1802,21 @@ function escAttr(value) {
 elements.searchInput.addEventListener("input", () => onSearch(elements.searchInput.value));
 elements.searchClear.addEventListener("click", clearSearch);
 elements.reloadButton.addEventListener("click", loadKnowledgeHub);
-elements.exportButton.addEventListener("click", exportData);
+elements.exportButton?.addEventListener("click", exportData);
 elements.newEntryButton.addEventListener("click", openEntryModal);
 elements.entryModalClose.addEventListener("click", closeEntryModal);
 elements.entryCancel.addEventListener("click", closeEntryModal);
 elements.entryForm.addEventListener("submit", submitEntryForm);
+elements.chatLauncher?.addEventListener("click", openChatPanel);
+elements.chatClose?.addEventListener("click", closeChatPanel);
+elements.chatClear?.addEventListener("click", resetChat);
+elements.chatForm?.addEventListener("submit", submitChatQuestion);
 elements.entryModal.addEventListener("click", (event) => {
   if (event.target === elements.entryModal) closeEntryModal();
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && elements.entryModal.classList.contains("show")) closeEntryModal();
+  if (event.key === "Escape" && elements.chatPanel?.classList.contains("show")) closeChatPanel();
 });
 elements.introClose.addEventListener("click", () => {
   elements.introPanel.classList.add("collapsed");
