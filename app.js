@@ -726,7 +726,6 @@ function updateStats() {
     </div>
     <div class="overview-grid">
     <section class="stats-summary" aria-label="Riepilogo generale">
-      <span class="stat-label">Riepilogo generale</span>
       <div class="stat-summary-items">
         <div>
         <span class="stat-label">Totale informazioni inserite</span>
@@ -940,7 +939,7 @@ function render() {
 
   document.querySelector("#resultsInfo").innerHTML = searchTerm
     ? `<strong>${filtered.length}</strong> risultati per "<strong>${escHtml(searchTerm)}</strong>"`
-    : `<strong>${filtered.length}</strong> risorse`;
+    : `<strong>${filtered.length}</strong> ${filtered.length === 1 ? "elemento" : "elementi"}`;
 
   const cards = document.querySelector("#cards");
   if (!filtered.length) {
@@ -982,15 +981,13 @@ function render() {
 }
 
 function cardTemplate(item, index) {
-  const toolLabel = item.strumento.length > 28 ? `${item.strumento.substring(0, 28)}...` : item.strumento;
-
   return `
     <article class="card" id="card-${escAttr(item.id)}" data-id="${escAttr(item.id)}" style="animation-delay:${Math.min(index, 12) * 0.03}s">
       <div class="card-head">
         <div class="card-title-wrap">
           <div class="card-badges">
             ${item.tipo ? `<span class="badge ${tipoBadge(item.tipo)}">${escHtml(item.tipo)}</span>` : ""}
-            ${item.strumento ? `<span class="badge badge-tool" style="background:${toolColor(item.strumento)}1A;color:${toolColor(item.strumento)}">${escHtml(toolLabel)}</span>` : ""}
+            ${renderCardToolBadges(item.strumento)}
             ${item.attachments.length ? `<span class="badge badge-attachment">${item.attachments.length} allegati</span>` : ""}
           </div>
           <div class="card-title">${highlight(item.displayTitle, searchTerm)}</div>
@@ -1016,6 +1013,34 @@ function cardTemplate(item, index) {
         </div>
       </div>
     </article>`;
+}
+
+function renderCardToolBadges(strumenti) {
+  const values = [];
+  const seen = new Set();
+
+  splitValues(strumenti).forEach((tool) => {
+    const generalTool = generalToolName(tool);
+    const key = normalizeSearchText(generalTool);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    values.push(generalTool);
+  });
+
+  return values
+    .map((tool) => `<span class="badge badge-tool" style="background:${toolColor(tool)}1A;color:${toolColor(tool)}">${escHtml(tool)}</span>`)
+    .join("");
+}
+
+function generalToolName(tool) {
+  const value = String(tool || "").trim();
+  const knownTool = Object.keys(TOOL_COLORS)
+    .sort((a, b) => b.length - a.length)
+    .find((name) => value.toLowerCase().includes(name.toLowerCase()));
+
+  if (knownTool) return knownTool;
+
+  return value.replace(/\s*[\[(].*?[\])]\s*$/g, "").trim();
 }
 
 function renderTagChips(tags) {

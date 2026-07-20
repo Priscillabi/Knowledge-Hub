@@ -696,9 +696,9 @@ textarea {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 12px;
-  min-height: 112px;
-  padding: 13px 15px;
+  gap: 8px;
+  min-height: 92px;
+  padding: 10px 13px;
   background:
     linear-gradient(135deg, rgba(42, 50, 124, 0.08), transparent),
     linear-gradient(180deg, #fff, #f9fafc);
@@ -706,7 +706,7 @@ textarea {
 
 .stat-summary-items {
   display: grid;
-  gap: 10px;
+  gap: 7px;
 }
 
 .stat-summary-items div {
@@ -714,8 +714,13 @@ textarea {
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 9px;
+  padding-top: 7px;
   border-top: 1px solid var(--line);
+}
+
+.stat-summary-items div:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .stat-label,
@@ -729,7 +734,7 @@ textarea {
 
 .stats-summary strong {
   color: var(--navy);
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 800;
   line-height: 1;
 }
