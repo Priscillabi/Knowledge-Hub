@@ -27,13 +27,14 @@ module.exports = async function handler(req, res) {
       return json(res, 400, { error: "VALIDATION_ERROR", message: "Inserisci una domanda." });
     }
 
-    const retrievalQuestion = originalQuestion && isContextualFollowUp(question) ? originalQuestion : question;
+    const externalRequest = wantsExternalSources(question);
+    const retrievalQuestion = resolveRetrievalQuestion(question, originalQuestion, history, externalRequest);
     const entries = await loadKnowledgeEntries();
     const constraints = extractQuestionConstraints(retrievalQuestion);
     const ranked = rankEntries(retrievalQuestion, entries, constraints);
     const internalSources = ranked.filter((item) => item.score > 0).slice(0, MAX_INTERNAL_SOURCES);
     const internalSearchSufficient = isInternalSearchSufficient(internalSources, constraints);
-    const externalRequest = wantsExternalSources(question);
+    logInternalRetrieval(retrievalQuestion, internalSources, internalSearchSufficient, constraints);
 
     const shouldUseWeb = isWebFallbackEnabled() && (!internalSearchSufficient || externalRequest || allowWeb);
     const promptSources = internalSearchSufficient ? internalSources : [];
@@ -118,18 +119,24 @@ function extractQuestionConstraints(question) {
     { value: "Template", aliases: ["template"] },
     { value: "SOP", aliases: ["sop", "procedura operativa standard"] },
   ];
-  const featureAliases = ["dynamic view", "data shuttle", "data mesh", "smart assist"];
+  const featureAliases = [
+    { value: "dynamic view", aliases: ["dynamic view"] },
+    { value: "data shuttle", aliases: ["data shuttle"] },
+    { value: "data mesh", aliases: ["data mesh"] },
+    { value: "smart assist", aliases: ["smart assist"] },
+    { value: "forms", aliases: ["form", "forms", "modulo", "moduli"] },
+  ];
 
   return {
     tools: matchAliases(normalizedQuestion, toolAliases),
     types: matchAliases(normalizedQuestion, typeAliases),
-    features: featureAliases.filter((feature) => normalizedQuestion.includes(feature)),
+    features: matchAliases(normalizedQuestion, featureAliases),
   };
 }
 
 function matchAliases(normalizedQuestion, definitions) {
   return definitions
-    .filter((definition) => definition.aliases.some((alias) => normalizedQuestion.includes(normalizeText(alias))))
+    .filter((definition) => definition.aliases.some((alias) => normalizedIncludesTerm(normalizedQuestion, alias)))
     .map((definition) => definition.value);
 }
 
@@ -166,12 +173,12 @@ function filterEntriesByConstraints(entries, constraints = {}) {
 }
 
 function entryMatchesValue(value, expected) {
-  return normalizeText(value).includes(normalizeText(expected));
+  return normalizedIncludesTerm(normalizeText(value), expected);
 }
 
 function entryContainsFeature(entry, feature) {
   const haystack = normalizeText([entry.title, entry.tag, entry.strumento, entry.technicalText, entry.desc].join(" "));
-  return haystack.includes(normalizeText(feature));
+  return normalizedIncludesTerm(haystack, feature);
 }
 
 function scoreEntry(entry, normalizedQuestion, tokens, constraints = {}) {
@@ -209,11 +216,72 @@ function uniqueTokens(value) {
   return [...new Set(String(value || "").split(" ").filter((token) => token.length > 2))];
 }
 
+function normalizedIncludesTerm(normalizedTextValue, rawTerm) {
+  const text = String(normalizedTextValue || "");
+  const term = normalizeText(rawTerm);
+  if (!text || !term) return false;
+  if (term.includes(" ")) return text.includes(term);
+
+  const variants = term.endsWith("s") && term.length > 4 ? [term, term.slice(0, -1)] : [term, `${term}s`];
+  return variants.some((variant) => new RegExp(`(^|[^a-z0-9])${escapeRegExp(variant)}([^a-z0-9]|$)`).test(text));
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function isInternalSearchSufficient(internalSources, constraints = {}) {
   if (!internalSources.length) return false;
   const topScore = Number(internalSources[0]?.score || 0);
-  const hasExplicitConstraints = Boolean((constraints.tools || []).length || (constraints.types || []).length || (constraints.features || []).length);
-  return topScore >= (hasExplicitConstraints ? MIN_RELEVANCE_SCORE : MIN_RELEVANCE_SCORE * 2);
+  const hasFeatureConstraints = Boolean((constraints.features || []).length);
+  const hasExplicitConstraints = Boolean((constraints.tools || []).length || (constraints.types || []).length || hasFeatureConstraints);
+  const threshold = hasFeatureConstraints ? 32 : hasExplicitConstraints ? MIN_RELEVANCE_SCORE * 2 : MIN_RELEVANCE_SCORE * 3;
+  return topScore >= threshold;
+}
+
+function logInternalRetrieval(question, internalSources, sufficient, constraints = {}) {
+  console.log(
+    JSON.stringify({
+      event: "internal_retrieval",
+      question,
+      constraints,
+      sufficient,
+      sources: internalSources.slice(0, 5).map((source) => ({
+        id: source.id,
+        title: source.title,
+        score: source.score,
+        tipo: source.tipo,
+        strumento: source.strumento,
+      })),
+    }),
+  );
+}
+
+function resolveRetrievalQuestion(question, originalQuestion, history = [], externalRequest = false) {
+  if (originalQuestion && (isContextualFollowUp(question) || externalRequest)) return originalQuestion;
+  if (!isContextualFollowUp(question) && !externalRequest) return question;
+
+  const previousQuestion = previousSubstantiveUserQuestion(question, history);
+  return previousQuestion || question;
+}
+
+function previousSubstantiveUserQuestion(currentQuestion, history = []) {
+  const current = normalizeText(currentQuestion);
+  return [...history]
+    .reverse()
+    .map((item) => (item?.role === "user" ? String(item.content || "").trim() : ""))
+    .find((content) => {
+      if (!content) return false;
+      if (normalizeText(content) === current) return false;
+      if (wantsExternalSources(content)) return false;
+      if (isWebConfirmationMessage(content)) return false;
+      return true;
+    });
+}
+
+function isWebConfirmationMessage(value) {
+  const normalizedValue = normalizeText(value);
+  return normalizedValue.includes("cerca fonti esterne") || normalizedValue.includes("resta nella knowledge base");
 }
 
 function isWebFallbackEnabled() {
@@ -273,9 +341,11 @@ async function searchExternalSources(question, constraints, history = []) {
 
   const primaryResults = await callTavilySearch(searchProfile.query, apiKey, preferredDomains);
   let results = rankExternalResults(primaryResults, searchProfile, preferredDomains);
+  let rawResultCount = primaryResults.length;
 
   if (!results.length && preferredDomains.length) {
     const fallbackResults = await callTavilySearch(searchProfile.query, apiKey, []);
+    rawResultCount += fallbackResults.length;
     results = rankExternalResults(fallbackResults, searchProfile, []);
   }
 
@@ -283,7 +353,9 @@ async function searchExternalSources(question, constraints, history = []) {
     JSON.stringify({
       event: "tavily_results",
       query: searchProfile.query,
+      raw: rawResultCount,
       kept: results.length,
+      discarded: Math.max(rawResultCount - results.length, 0),
       topScores: results.slice(0, 5).map((result) => ({ source: result.source, score: result.externalScore })),
     }),
   );
@@ -342,6 +414,9 @@ function detectExternalSearchTerms(question, constraints = {}) {
   if (normalizedQuestion.includes("dynamic view")) features.add("dynamic view");
   if (normalizedQuestion.includes("data shuttle")) features.add("data shuttle");
   if (normalizedQuestion.includes("data mesh")) features.add("data mesh");
+  if (normalizedQuestion.includes("form") || normalizedQuestion.includes("modulo") || normalizedQuestion.includes("moduli")) {
+    features.add("forms");
+  }
   if (normalizedQuestion.includes("grid view") || normalizedQuestion.includes("visualizzazione a griglia") || normalizedQuestion.includes("vista griglia") || normalizedQuestion.includes("griglia")) {
     features.add("grid view");
   }
@@ -362,7 +437,7 @@ function detectExternalSearchTerms(question, constraints = {}) {
   const requiredTerms = new Set();
   tools.forEach((tool) => requiredTerms.add(normalizeText(externalToolName(tool))));
   features.forEach((feature) => {
-    const normalizedFeature = normalizeText(externalFeatureName(feature));
+    const normalizedFeature = normalizeText(externalRequiredTerm(feature));
     if (normalizedFeature) requiredTerms.add(normalizedFeature);
   });
   intents.forEach((intent) => optionalTerms.add(normalizeText(intent)));
@@ -396,10 +471,21 @@ function externalFeatureName(feature) {
     "dynamic view": "Dynamic View",
     "data shuttle": "Data Shuttle",
     "data mesh": "Data Mesh",
+    forms: "create form",
     "rolling 12 months": "rolling 12 months",
     "dax measure": "DAX measure",
   };
   return names[normalizedFeature] || feature;
+}
+
+function externalRequiredTerm(feature) {
+  const normalizedFeature = normalizeText(feature);
+  const terms = {
+    forms: "form",
+    "rolling 12 months": "rolling 12 months",
+    "dax measure": "dax",
+  };
+  return terms[normalizedFeature] || externalFeatureName(feature);
 }
 
 function sanitizeSearchQuery(question) {
@@ -433,7 +519,7 @@ function preferredExternalDomains(constraints = {}) {
 async function callTavilySearch(query, apiKey, includeDomains) {
   const body = {
     query,
-    search_depth: "basic",
+    search_depth: "advanced",
     topic: "general",
     max_results: 5,
     include_answer: false,
@@ -484,8 +570,8 @@ function rankExternalResults(results, searchProfile, preferredDomains) {
   return results
     .map((result) => {
       const text = normalizeText([result.title, result.content, result.source, result.url].join(" "));
-      const matchedRequired = requiredTerms.filter((term) => text.includes(term));
-      const matchedOptional = optionalTerms.filter((term) => text.includes(term));
+      const matchedRequired = requiredTerms.filter((term) => normalizedIncludesTerm(text, term));
+      const matchedOptional = optionalTerms.filter((term) => normalizedIncludesTerm(text, term));
       const domainScore = officialDomains.has(result.source) ? 8 : 0;
       const requiredScore = matchedRequired.length * 12;
       const optionalScore = matchedOptional.length * 3;
