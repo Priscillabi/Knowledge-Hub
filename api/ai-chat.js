@@ -3,7 +3,11 @@ const { getSheetId, json, normalizeRow, smartsheetFetch } = require("./_smartshe
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const DEFAULT_MODEL = "gpt-4o-mini";
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
+const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
+const GEMINI_MODEL_REPLACEMENTS = {
+  "gemini-2.5-flash-lite": "gemini-3.1-flash-lite",
+  "models/gemini-2.5-flash-lite": "gemini-3.1-flash-lite",
+};
 const MAX_INTERNAL_SOURCES = 5;
 const MIN_RELEVANCE_SCORE = 7;
 
@@ -311,10 +315,21 @@ function isLikelyGeminiKey(value) {
 }
 
 function resolveGeminiModel() {
-  const explicitModel = process.env.GEMINI_MODEL || "";
-  if (explicitModel) return explicitModel;
+  const explicitModel = String(process.env.GEMINI_MODEL || "").trim();
+  if (explicitModel) return normalizeGeminiModelName(explicitModel);
 
   return DEFAULT_GEMINI_MODEL;
+}
+
+function normalizeGeminiModelName(model) {
+  const normalizedModel = String(model || "").trim();
+  const replacement = GEMINI_MODEL_REPLACEMENTS[normalizedModel];
+  if (replacement) {
+    console.warn(`Gemini model ${normalizedModel} is no longer available. Using ${replacement}.`);
+    return replacement;
+  }
+
+  return normalizedModel;
 }
 
 function buildOpenAiBody(question, history, internalSources, useWeb, constraints) {
@@ -402,14 +417,21 @@ async function callGemini(body, apiKey, model) {
     const message =
       response.status === 429
         ? "Il servizio AI ha raggiunto temporaneamente il limite di utilizzo. Riprova tra qualche minuto."
+        : isGeminiModelUnavailable(data)
+          ? "Il modello AI configurato non è disponibile. Aggiorna la variabile GEMINI_MODEL usando un modello Gemini attivo."
         : data?.error?.message || data?.message || `Errore Gemini ${response.status}`;
     const error = new Error(message);
     error.statusCode = response.status;
-    error.details = response.status === 429 ? undefined : data;
+    error.details = response.status === 429 || isGeminiModelUnavailable(data) ? undefined : data;
     throw error;
   }
 
   return data;
+}
+
+function isGeminiModelUnavailable(data) {
+  const message = String(data?.error?.message || data?.message || "").toLowerCase();
+  return message.includes("no longer available") || message.includes("not found") || message.includes("not supported");
 }
 
 function buildSystemPrompt() {
