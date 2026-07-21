@@ -37,7 +37,18 @@ module.exports = async function handler(req, res) {
 
     const shouldUseWeb = isWebFallbackEnabled() && (!internalSearchSufficient || externalRequest || allowWeb);
     const promptSources = internalSearchSufficient ? internalSources : [];
-    const externalSearchSources = shouldUseWeb ? await searchExternalSources(retrievalQuestion, constraints) : [];
+    const externalSearchSources = shouldUseWeb ? await searchExternalSources(retrievalQuestion, constraints, history) : [];
+
+    if (shouldUseWeb && !promptSources.length && !externalSearchSources.length) {
+      return json(res, 200, {
+        ok: true,
+        answer: "Non ho trovato fonti esterne sufficientemente pertinenti e attendibili per rispondere con sicurezza.",
+        usedWeb: true,
+        internalSources: [],
+        externalSources: [],
+      });
+    }
+
     const aiResponse = await generateAnswer(retrievalQuestion, history, promptSources, shouldUseWeb, constraints, externalSearchSources);
 
     return json(res, 200, {
@@ -238,7 +249,7 @@ function isContextualFollowUp(question) {
   ].some((term) => normalizedQuestion.includes(normalizeText(term)));
 }
 
-async function searchExternalSources(question, constraints) {
+async function searchExternalSources(question, constraints, history = []) {
   const provider = String(process.env.WEB_SEARCH_PROVIDER || "tavily").trim().toLowerCase();
   if (provider !== "tavily") return [];
 
@@ -249,11 +260,156 @@ async function searchExternalSources(question, constraints) {
     throw error;
   }
 
-  const preferredDomains = preferredExternalDomains(constraints);
-  const primaryResults = await callTavilySearch(question, apiKey, preferredDomains);
-  const results = primaryResults.length ? primaryResults : await callTavilySearch(question, apiKey, []);
+  const searchProfile = buildExternalSearchProfile(question, constraints, history);
+  const preferredDomains = preferredExternalDomains(searchProfile.constraints);
+  console.log(
+    JSON.stringify({
+      event: "tavily_search",
+      originalQuestion: question,
+      query: searchProfile.query,
+      domains: preferredDomains,
+    }),
+  );
+
+  const primaryResults = await callTavilySearch(searchProfile.query, apiKey, preferredDomains);
+  let results = rankExternalResults(primaryResults, searchProfile, preferredDomains);
+
+  if (!results.length && preferredDomains.length) {
+    const fallbackResults = await callTavilySearch(searchProfile.query, apiKey, []);
+    results = rankExternalResults(fallbackResults, searchProfile, []);
+  }
+
+  console.log(
+    JSON.stringify({
+      event: "tavily_results",
+      query: searchProfile.query,
+      kept: results.length,
+      topScores: results.slice(0, 5).map((result) => ({ source: result.source, score: result.externalScore })),
+    }),
+  );
 
   return results.slice(0, 5);
+}
+
+function buildExternalSearchProfile(question, constraints = {}, history = []) {
+  const contextQuestion = enrichContextualQuestion(question, history);
+  const detected = detectExternalSearchTerms(contextQuestion, constraints);
+  const queryParts = [];
+
+  detected.tools.forEach((tool) => queryParts.push(externalToolName(tool)));
+  detected.features.forEach((feature) => queryParts.push(externalFeatureName(feature)));
+  detected.intents.forEach((intent) => queryParts.push(intent));
+  queryParts.push("official documentation");
+
+  const query = [...new Set(queryParts.map((part) => part.trim()).filter(Boolean))]
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return {
+    originalQuestion: question,
+    contextQuestion,
+    query: query || sanitizeSearchQuery(contextQuestion),
+    constraints: {
+      ...constraints,
+      tools: detected.tools,
+      features: detected.features,
+    },
+    requiredTerms: detected.requiredTerms,
+    optionalTerms: detected.optionalTerms,
+  };
+}
+
+function enrichContextualQuestion(question, history = []) {
+  if (!isContextualFollowUp(question)) return question;
+
+  const previousUserQuestion = [...history]
+    .reverse()
+    .map((item) => (item?.role === "user" ? String(item.content || "").trim() : ""))
+    .find((content) => content && !isContextualFollowUp(content));
+
+  return [previousUserQuestion, question].filter(Boolean).join(" ");
+}
+
+function detectExternalSearchTerms(question, constraints = {}) {
+  const normalizedQuestion = normalizeText(question);
+  const tools = new Set(constraints.tools || []);
+  const features = new Set((constraints.features || []).map(normalizeExternalFeature));
+  const intents = new Set();
+  const optionalTerms = new Set();
+
+  if (normalizedQuestion.includes("smart assist")) features.add("smart assist");
+  if (normalizedQuestion.includes("dynamic view")) features.add("dynamic view");
+  if (normalizedQuestion.includes("data shuttle")) features.add("data shuttle");
+  if (normalizedQuestion.includes("data mesh")) features.add("data mesh");
+  if (normalizedQuestion.includes("grid view") || normalizedQuestion.includes("visualizzazione a griglia") || normalizedQuestion.includes("vista griglia") || normalizedQuestion.includes("griglia")) {
+    features.add("grid view");
+  }
+  if (normalizedQuestion.includes("rolling") || normalizedQuestion.includes("12 mesi") || normalizedQuestion.includes("12 months")) {
+    features.add("rolling 12 months");
+  }
+  if (normalizedQuestion.includes("misura") || normalizedQuestion.includes("measure") || normalizedQuestion.includes("dax")) {
+    features.add("dax measure");
+  }
+
+  if (normalizedQuestion.includes("posso") || normalizedQuestion.includes("can ") || normalizedQuestion.includes("compatib") || normalizedQuestion.includes("utilizz")) {
+    intents.add("availability");
+  }
+  if (normalizedQuestion.includes("come") || normalizedQuestion.includes("how")) {
+    intents.add("how to");
+  }
+
+  const requiredTerms = new Set();
+  tools.forEach((tool) => requiredTerms.add(normalizeText(externalToolName(tool))));
+  features.forEach((feature) => {
+    const normalizedFeature = normalizeText(externalFeatureName(feature));
+    if (normalizedFeature) requiredTerms.add(normalizedFeature);
+  });
+  intents.forEach((intent) => optionalTerms.add(normalizeText(intent)));
+
+  return {
+    tools: [...tools],
+    features: [...features],
+    intents: [...intents],
+    requiredTerms: [...requiredTerms].filter(Boolean),
+    optionalTerms: [...optionalTerms].filter(Boolean),
+  };
+}
+
+function normalizeExternalFeature(feature) {
+  const normalizedFeature = normalizeText(feature);
+  if (normalizedFeature === "visualizzazione a griglia") return "grid view";
+  return normalizedFeature;
+}
+
+function externalToolName(tool) {
+  if (tool === "Power Point") return "PowerPoint";
+  return tool;
+}
+
+function externalFeatureName(feature) {
+  const normalizedFeature = normalizeText(feature);
+  const names = {
+    "smart assist": "Smart Assist",
+    "grid view": "Grid View",
+    "visualizzazione a griglia": "Grid View",
+    "dynamic view": "Dynamic View",
+    "data shuttle": "Data Shuttle",
+    "data mesh": "Data Mesh",
+    "rolling 12 months": "rolling 12 months",
+    "dax measure": "DAX measure",
+  };
+  return names[normalizedFeature] || feature;
+}
+
+function sanitizeSearchQuery(question) {
+  const genericWords = new Set(["posso", "puoi", "come", "fare", "usare", "utilizzare", "questo", "questa", "argomento", "sito", "link"]);
+  return String(question || "")
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\p{L}\p{N}-]/gu, ""))
+    .filter((word) => word.length > 2 && !genericWords.has(normalizeText(word)))
+    .join(" ")
+    .slice(0, 180);
 }
 
 function preferredExternalDomains(constraints = {}) {
@@ -268,14 +424,15 @@ function preferredExternalDomains(constraints = {}) {
   if (tools.includes("Smartsheet")) {
     domains.add("help.smartsheet.com");
     domains.add("smartsheet.com");
+    domains.add("developers.smartsheet.com");
   }
 
   return [...domains];
 }
 
-async function callTavilySearch(question, apiKey, includeDomains) {
+async function callTavilySearch(query, apiKey, includeDomains) {
   const body = {
-    query: question,
+    query,
     search_depth: "basic",
     topic: "general",
     max_results: 5,
@@ -317,6 +474,34 @@ async function callTavilySearch(question, apiKey, includeDomains) {
       content: String(result.content || "").replace(/\s+/g, " ").trim(),
       score: Number(result.score || 0),
     }));
+}
+
+function rankExternalResults(results, searchProfile, preferredDomains) {
+  const officialDomains = new Set(preferredDomains || []);
+  const requiredTerms = searchProfile.requiredTerms || [];
+  const optionalTerms = searchProfile.optionalTerms || [];
+
+  return results
+    .map((result) => {
+      const text = normalizeText([result.title, result.content, result.source, result.url].join(" "));
+      const matchedRequired = requiredTerms.filter((term) => text.includes(term));
+      const matchedOptional = optionalTerms.filter((term) => text.includes(term));
+      const domainScore = officialDomains.has(result.source) ? 8 : 0;
+      const requiredScore = matchedRequired.length * 12;
+      const optionalScore = matchedOptional.length * 3;
+      const tavilyScore = Number(result.score || 0) * 10;
+      const externalScore = domainScore + requiredScore + optionalScore + tavilyScore;
+      return {
+        ...result,
+        externalScore,
+        matchedRequired,
+      };
+    })
+    .filter((result) => {
+      if (requiredTerms.length <= 1) return result.matchedRequired.length >= 1 && result.externalScore >= 10;
+      return result.matchedRequired.length >= Math.min(2, requiredTerms.length) && result.externalScore >= 20;
+    })
+    .sort((a, b) => b.externalScore - a.externalScore);
 }
 
 function sourceHost(url) {
