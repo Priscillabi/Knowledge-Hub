@@ -3,7 +3,7 @@ const { getSheetId, json, normalizeRow, smartsheetFetch } = require("./_smartshe
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const DEFAULT_MODEL = "gpt-4o-mini";
-const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
 const MAX_INTERNAL_SOURCES = 5;
 const MIN_RELEVANCE_SCORE = 7;
 
@@ -314,9 +314,6 @@ function resolveGeminiModel() {
   const explicitModel = process.env.GEMINI_MODEL || "";
   if (explicitModel) return explicitModel;
 
-  const openAiModelValue = process.env.OPENAI_MODEL || "";
-  if (openAiModelValue.toLowerCase().startsWith("gemini")) return openAiModelValue;
-
   return DEFAULT_GEMINI_MODEL;
 }
 
@@ -389,6 +386,8 @@ async function callOpenAI(body, apiKey) {
 }
 
 async function callGemini(body, apiKey, model) {
+  console.log(`Gemini model in use: ${model}`);
+
   const response = await fetch(`${GEMINI_API_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
     method: "POST",
     headers: {
@@ -400,9 +399,13 @@ async function callGemini(body, apiKey, model) {
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const error = new Error(data?.error?.message || data?.message || `Errore Gemini ${response.status}`);
+    const message =
+      response.status === 429
+        ? "Il servizio AI ha raggiunto temporaneamente il limite di utilizzo. Riprova tra qualche minuto."
+        : data?.error?.message || data?.message || `Errore Gemini ${response.status}`;
+    const error = new Error(message);
     error.statusCode = response.status;
-    error.details = data;
+    error.details = response.status === 429 ? undefined : data;
     throw error;
   }
 
