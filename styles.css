@@ -1536,6 +1536,18 @@ textarea {
   margin-top: 8px;
 }
 
+.chat-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.chat-quick-action {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
 .chat-source-title {
   margin-top: 4px;
   color: var(--soft);

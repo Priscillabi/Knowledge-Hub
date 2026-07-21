@@ -263,6 +263,10 @@ let entryState = {
 let entryAttachmentFiles = [];
 let pendingEntryScrollPositions = {};
 let chatHistory = [];
+let chatContext = {
+  pendingWebSearchConfirmation: false,
+  originalQuestion: "",
+};
 
 const IMAGE_PREVIEW_EXTENSIONS = new Set(["JPG", "JPEG", "PNG", "GIF", "WEBP"]);
 const MAX_DIRECT_ATTACHMENT_BYTES = 4.2 * 1024 * 1024;
@@ -1806,6 +1810,10 @@ function closeChatPanel() {
 
 function resetChat() {
   chatHistory = [];
+  chatContext = {
+    pendingWebSearchConfirmation: false,
+    originalQuestion: "",
+  };
   renderChatMessages();
 }
 
@@ -1825,17 +1833,22 @@ function renderChatMessages(loading = false) {
   elements.chatMessages.querySelectorAll("[data-chat-source-id]").forEach((button) => {
     button.addEventListener("click", () => openKnowledgeSource(button.dataset.chatSourceId));
   });
+  elements.chatMessages.querySelectorAll("[data-chat-web-action]").forEach((button) => {
+    button.addEventListener("click", () => handleChatWebAction(button.dataset.chatWebAction));
+  });
 }
 
 function chatMessageTemplate(message) {
   const roleLabel = message.role === "user" ? "Tu" : "Knowledge Hub AI";
   const sources = message.role === "assistant" ? renderChatSources(message) : "";
   const content = message.role === "assistant" ? formatChatContent(message.content) : escHtml(message.content).replace(/\n/g, "<br>");
+  const actions = message.role === "assistant" ? renderChatActions(message) : "";
 
   return `
     <div class="chat-message ${message.role === "user" ? "user" : "assistant"}">
       <div class="chat-role">${roleLabel}</div>
       <div class="chat-bubble">${content}</div>
+      ${actions}
       ${sources}
     </div>`;
 }
@@ -1940,6 +1953,16 @@ function renderChatSources(message) {
     </div>`;
 }
 
+function renderChatActions(message) {
+  if (!message.needsWebConfirmation) return "";
+
+  return `
+    <div class="chat-quick-actions">
+      <button type="button" class="secondary-button chat-quick-action" data-chat-web-action="allow">Sì, cerca fonti esterne</button>
+      <button type="button" class="secondary-button chat-quick-action" data-chat-web-action="deny">No, resta nella Knowledge Base</button>
+    </div>`;
+}
+
 function internalSourceTemplate(source) {
   return `
     <button class="chat-source" type="button" data-chat-source-id="${escAttr(source.id)}">
@@ -1997,6 +2020,33 @@ async function submitChatQuestion(event) {
 
   chatHistory.push({ role: "user", content: question });
   elements.chatInput.value = "";
+  await requestChatAnswer(question, { allowWeb: false });
+}
+
+async function handleChatWebAction(action) {
+  if (!chatContext.pendingWebSearchConfirmation) return;
+
+  if (action === "deny") {
+    chatHistory.push({ role: "user", content: "No, resta nella Knowledge Base" });
+    chatHistory.push({
+      role: "assistant",
+      content: "Va bene. Al momento non risultano contenuti interni sufficienti per rispondere in modo affidabile.",
+      internalSources: [],
+      externalSources: [],
+    });
+    chatContext.pendingWebSearchConfirmation = false;
+    chatContext.originalQuestion = "";
+    renderChatMessages();
+    return;
+  }
+
+  chatHistory.push({ role: "user", content: "Sì, cerca fonti esterne" });
+  await requestChatAnswer(chatContext.originalQuestion, { allowWeb: true });
+}
+
+async function requestChatAnswer(question, options = {}) {
+  const allowWeb = Boolean(options.allowWeb);
+  const originalQuestion = allowWeb ? chatContext.originalQuestion : resolveOriginalChatQuestion(question);
   renderChatMessages(true);
 
   try {
@@ -2005,6 +2055,8 @@ async function submitChatQuestion(event) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         question,
+        originalQuestion,
+        allowWeb,
         history: chatHistory.filter((message) => message.role === "user" || message.role === "assistant").slice(-8),
       }),
     });
@@ -2014,6 +2066,21 @@ async function submitChatQuestion(event) {
       throw new Error(data.message || data.error || `Errore ${response.status}`);
     }
 
+    if (data.needsWebConfirmation) {
+      chatContext.pendingWebSearchConfirmation = true;
+      chatContext.originalQuestion = data.originalQuestion || originalQuestion || question;
+      chatHistory.push({
+        role: "assistant",
+        content: data.answer,
+        internalSources: [],
+        externalSources: [],
+        needsWebConfirmation: true,
+      });
+      return;
+    }
+
+    chatContext.pendingWebSearchConfirmation = false;
+    chatContext.originalQuestion = "";
     chatHistory.push({
       role: "assistant",
       content: data.answer || "Non ho trovato informazioni sufficienti per rispondere.",
@@ -2031,6 +2098,21 @@ async function submitChatQuestion(event) {
   } finally {
     renderChatMessages();
   }
+}
+
+function resolveOriginalChatQuestion(question) {
+  if (!isContextualChatQuestion(question)) return question;
+
+  const previousUserQuestions = chatHistory
+    .filter((message) => message.role === "user")
+    .map((message) => String(message.content || "").trim())
+    .filter(Boolean);
+  return previousUserQuestions.length > 1 ? previousUserQuestions[previousUserQuestions.length - 2] : question;
+}
+
+function isContextualChatQuestion(question) {
+  const normalizedQuestion = normalizeSearchText(question);
+  return ["questo argomento", "questo tema", "questa cosa", "su questo"].some((term) => normalizedQuestion.includes(term));
 }
 
 function highlight(text, term) {

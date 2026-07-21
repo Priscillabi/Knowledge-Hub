@@ -14,24 +14,44 @@ module.exports = async function handler(req, res) {
 
   try {
     const question = String(req.body?.question || "").trim();
+    const originalQuestion = String(req.body?.originalQuestion || "").trim();
+    const allowWeb = Boolean(req.body?.allowWeb);
     const history = Array.isArray(req.body?.history) ? req.body.history.slice(-6) : [];
 
     if (!question) {
       return json(res, 400, { error: "VALIDATION_ERROR", message: "Inserisci una domanda." });
     }
 
+    const retrievalQuestion = originalQuestion && isContextualFollowUp(question) ? originalQuestion : question;
     const entries = await loadKnowledgeEntries();
-    const constraints = extractQuestionConstraints(question);
-    const ranked = rankEntries(question, entries, constraints);
+    const constraints = extractQuestionConstraints(retrievalQuestion);
+    const ranked = rankEntries(retrievalQuestion, entries, constraints);
     const internalSources = ranked.filter((item) => item.score > 0).slice(0, MAX_INTERNAL_SOURCES);
-    const shouldUseWeb = shouldUseWebFallback(internalSources);
-    const aiResponse = await generateAnswer(question, history, internalSources, shouldUseWeb, constraints);
+    const internalSearchSufficient = isInternalSearchSufficient(internalSources, constraints);
+    const externalRequest = wantsExternalSources(question);
+
+    if (!allowWeb && (!internalSearchSufficient || externalRequest)) {
+      return json(res, 200, {
+        ok: true,
+        answer:
+          "Non ho trovato nella Knowledge Base informazioni sufficientemente pertinenti per rispondere alla tua domanda. Vuoi che cerchi documentazione e fonti esterne attendibili?",
+        needsWebConfirmation: true,
+        originalQuestion: retrievalQuestion,
+        usedWeb: false,
+        internalSources: [],
+        externalSources: [],
+      });
+    }
+
+    const shouldUseWeb = allowWeb && isWebFallbackEnabled();
+    const promptSources = internalSearchSufficient ? internalSources : [];
+    const aiResponse = await generateAnswer(retrievalQuestion, history, promptSources, shouldUseWeb, constraints);
 
     return json(res, 200, {
       ok: true,
       answer: aiResponse.answer,
       usedWeb: aiResponse.usedWeb,
-      internalSources: normalizeInternalSources(aiResponse.internalSources, internalSources),
+      internalSources: normalizeInternalSources(aiResponse.internalSources, promptSources),
       externalSources: Array.isArray(aiResponse.externalSources) ? aiResponse.externalSources : [],
     });
   } catch (error) {
@@ -185,10 +205,44 @@ function uniqueTokens(value) {
   return [...new Set(String(value || "").split(" ").filter((token) => token.length > 2))];
 }
 
-function shouldUseWebFallback(internalSources) {
+function isInternalSearchSufficient(internalSources, constraints = {}) {
+  if (!internalSources.length) return false;
+  const topScore = Number(internalSources[0]?.score || 0);
+  const hasExplicitConstraints = Boolean((constraints.tools || []).length || (constraints.types || []).length || (constraints.features || []).length);
+  return topScore >= (hasExplicitConstraints ? MIN_RELEVANCE_SCORE : MIN_RELEVANCE_SCORE * 2);
+}
+
+function isWebFallbackEnabled() {
   if (String(process.env.ENABLE_WEB_FALLBACK || "").toLowerCase() !== "true") return false;
-  if (!internalSources.length) return true;
-  return Number(internalSources[0]?.score || 0) < MIN_RELEVANCE_SCORE;
+  return true;
+}
+
+function wantsExternalSources(question) {
+  const normalizedQuestion = normalizeText(question);
+  return [
+    "link",
+    "sito",
+    "siti",
+    "documentazione",
+    "fonte esterna",
+    "fonti esterne",
+    "online",
+    "web",
+    "microsoft learn",
+    "documentazione ufficiale",
+  ].some((term) => normalizedQuestion.includes(normalizeText(term)));
+}
+
+function isContextualFollowUp(question) {
+  const normalizedQuestion = normalizeText(question);
+  return [
+    "questo argomento",
+    "questo tema",
+    "questa cosa",
+    "questa domanda",
+    "ne parli",
+    "su questo",
+  ].some((term) => normalizedQuestion.includes(normalizeText(term)));
 }
 
 async function generateAnswer(question, history, internalSources, useWeb, constraints) {
