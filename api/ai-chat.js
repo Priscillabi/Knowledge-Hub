@@ -35,20 +35,7 @@ module.exports = async function handler(req, res) {
     const internalSearchSufficient = isInternalSearchSufficient(internalSources, constraints);
     const externalRequest = wantsExternalSources(question);
 
-    if (!allowWeb && (!internalSearchSufficient || externalRequest)) {
-      return json(res, 200, {
-        ok: true,
-        answer:
-          "Non ho trovato nella Knowledge Base informazioni sufficientemente pertinenti per rispondere alla tua domanda. Vuoi che cerchi documentazione e fonti esterne attendibili?",
-        needsWebConfirmation: true,
-        originalQuestion: retrievalQuestion,
-        usedWeb: false,
-        internalSources: [],
-        externalSources: [],
-      });
-    }
-
-    const shouldUseWeb = allowWeb && isWebFallbackEnabled();
+    const shouldUseWeb = isWebFallbackEnabled() && (!internalSearchSufficient || externalRequest || allowWeb);
     const promptSources = internalSearchSufficient ? internalSources : [];
     const externalSearchSources = shouldUseWeb ? await searchExternalSources(retrievalQuestion, constraints) : [];
     const aiResponse = await generateAnswer(retrievalQuestion, history, promptSources, shouldUseWeb, constraints, externalSearchSources);
@@ -120,7 +107,7 @@ function extractQuestionConstraints(question) {
     { value: "Template", aliases: ["template"] },
     { value: "SOP", aliases: ["sop", "procedura operativa standard"] },
   ];
-  const featureAliases = ["dynamic view", "data shuttle", "data mesh"];
+  const featureAliases = ["dynamic view", "data shuttle", "data mesh", "smart assist"];
 
   return {
     tools: matchAliases(normalizedQuestion, toolAliases),
@@ -342,9 +329,22 @@ function sourceHost(url) {
 
 async function generateAnswer(question, history, internalSources, useWeb, constraints, externalSources = []) {
   const provider = resolveAiProvider();
-  const data = provider.name === "gemini"
-    ? await callGemini(buildGeminiBody(question, history, internalSources, useWeb, constraints, externalSources), provider.apiKey, provider.model)
-    : await callOpenAI(buildOpenAiBody(question, history, internalSources, useWeb, constraints, externalSources), provider.apiKey);
+  let data;
+  try {
+    data = provider.name === "gemini"
+      ? await callGemini(buildGeminiBody(question, history, internalSources, useWeb, constraints, externalSources), provider.apiKey, provider.model)
+      : await callOpenAI(buildOpenAiBody(question, history, internalSources, useWeb, constraints, externalSources), provider.apiKey);
+  } catch (error) {
+    if (useWeb && externalSources.length && error.statusCode === 429) {
+      return {
+        answer: externalSearchFallbackAnswer(externalSources),
+        usedWeb: true,
+        internalSources: [],
+        externalSources: [],
+      };
+    }
+    throw error;
+  }
   const text = provider.name === "gemini" ? extractGeminiText(data) : extractOpenAiText(data);
   const parsed = parseJsonObjectDeep(text);
   const answer = extractAnswerText(parsed, text, internalSources, useWeb);
@@ -578,6 +578,15 @@ function externalSourceForPrompt(source) {
     snippet: String(source.content || "").slice(0, 1200),
     relevance_score: source.score,
   };
+}
+
+function externalSearchFallbackAnswer(externalSources) {
+  const lines = [
+    "Non ho trovato informazioni sufficienti nella Knowledge Base. Ho recuperato alcune fonti esterne attendibili che puoi consultare:",
+    "",
+    ...externalSources.slice(0, 5).map((source, index) => `${index + 1}. ${source.title || source.url} - ${source.source || sourceHost(source.url)}`),
+  ];
+  return lines.join("\n");
 }
 
 function normalizeInternalSources(modelSources, retrievedSources) {
