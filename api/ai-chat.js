@@ -2,6 +2,7 @@ const { getSheetId, json, normalizeRow, smartsheetFetch } = require("./_smartshe
 
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+const TAVILY_API_BASE = "https://api.tavily.com";
 const DEFAULT_MODEL = "gpt-4o-mini";
 const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
 const GEMINI_MODEL_REPLACEMENTS = {
@@ -49,14 +50,15 @@ module.exports = async function handler(req, res) {
 
     const shouldUseWeb = allowWeb && isWebFallbackEnabled();
     const promptSources = internalSearchSufficient ? internalSources : [];
-    const aiResponse = await generateAnswer(retrievalQuestion, history, promptSources, shouldUseWeb, constraints);
+    const externalSearchSources = shouldUseWeb ? await searchExternalSources(retrievalQuestion, constraints) : [];
+    const aiResponse = await generateAnswer(retrievalQuestion, history, promptSources, shouldUseWeb, constraints, externalSearchSources);
 
     return json(res, 200, {
       ok: true,
       answer: aiResponse.answer,
       usedWeb: aiResponse.usedWeb,
       internalSources: normalizeInternalSources(aiResponse.internalSources, promptSources),
-      externalSources: Array.isArray(aiResponse.externalSources) ? aiResponse.externalSources : [],
+      externalSources: normalizeExternalSources(aiResponse.externalSources, externalSearchSources),
     });
   } catch (error) {
     return json(res, error.statusCode || 500, {
@@ -249,13 +251,101 @@ function isContextualFollowUp(question) {
   ].some((term) => normalizedQuestion.includes(normalizeText(term)));
 }
 
-async function generateAnswer(question, history, internalSources, useWeb, constraints) {
+async function searchExternalSources(question, constraints) {
+  const provider = String(process.env.WEB_SEARCH_PROVIDER || "tavily").trim().toLowerCase();
+  if (provider !== "tavily") return [];
+
+  const apiKey = process.env.TAVILY_API_KEY || "";
+  if (!apiKey) {
+    const error = new Error("Ricerca esterna non configurata. Aggiungi TAVILY_API_KEY su Vercel.");
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const preferredDomains = preferredExternalDomains(constraints);
+  const primaryResults = await callTavilySearch(question, apiKey, preferredDomains);
+  const results = primaryResults.length ? primaryResults : await callTavilySearch(question, apiKey, []);
+
+  return results.slice(0, 5);
+}
+
+function preferredExternalDomains(constraints = {}) {
+  const tools = constraints.tools || [];
+  const domains = new Set();
+
+  if (tools.some((tool) => ["Power BI", "Power Query", "Power Automate", "Excel", "Word", "Power Point"].includes(tool))) {
+    domains.add("learn.microsoft.com");
+    domains.add("support.microsoft.com");
+  }
+
+  if (tools.includes("Smartsheet")) {
+    domains.add("help.smartsheet.com");
+    domains.add("smartsheet.com");
+  }
+
+  return [...domains];
+}
+
+async function callTavilySearch(question, apiKey, includeDomains) {
+  const body = {
+    query: question,
+    search_depth: "basic",
+    topic: "general",
+    max_results: 5,
+    include_answer: false,
+    include_raw_content: false,
+  };
+
+  if (includeDomains.length) {
+    body.include_domains = includeDomains;
+  }
+
+  const response = await fetch(`${TAVILY_API_BASE}/search`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      response.status === 429
+        ? "La ricerca esterna ha raggiunto temporaneamente il limite di utilizzo. Riprova tra qualche minuto."
+        : data?.error || data?.message || `Errore Tavily ${response.status}`;
+    const error = new Error(message);
+    error.statusCode = response.status;
+    error.details = response.status === 429 ? undefined : data;
+    throw error;
+  }
+
+  return (data?.results || [])
+    .filter((result) => result.url)
+    .map((result) => ({
+      title: String(result.title || result.url || "").trim(),
+      url: String(result.url || "").trim(),
+      source: sourceHost(result.url),
+      content: String(result.content || "").replace(/\s+/g, " ").trim(),
+      score: Number(result.score || 0),
+    }));
+}
+
+function sourceHost(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch (error) {
+    return "";
+  }
+}
+
+async function generateAnswer(question, history, internalSources, useWeb, constraints, externalSources = []) {
   const provider = resolveAiProvider();
   const data = provider.name === "gemini"
-    ? await callGemini(buildGeminiBody(question, history, internalSources, useWeb, constraints), provider.apiKey, provider.model)
-    : await callOpenAI(buildOpenAiBody(question, history, internalSources, useWeb, constraints), provider.apiKey);
+    ? await callGemini(buildGeminiBody(question, history, internalSources, useWeb, constraints, externalSources), provider.apiKey, provider.model)
+    : await callOpenAI(buildOpenAiBody(question, history, internalSources, useWeb, constraints, externalSources), provider.apiKey);
   const text = provider.name === "gemini" ? extractGeminiText(data) : extractOpenAiText(data);
-  const externalSources = provider.name === "gemini" ? extractGeminiExternalSources(data) : [];
   const parsed = parseJsonObjectDeep(text);
   const answer = extractAnswerText(parsed, text, internalSources, useWeb);
 
@@ -264,7 +354,7 @@ async function generateAnswer(question, history, internalSources, useWeb, constr
       answer,
       usedWeb: Boolean(parsed.used_web || parsed.usedWeb || useWeb),
       internalSources: Array.isArray(parsed.internal_sources) ? parsed.internal_sources : [],
-      externalSources: Array.isArray(parsed.external_sources) ? parsed.external_sources : externalSources,
+      externalSources: Array.isArray(parsed.external_sources) ? parsed.external_sources : [],
     };
   }
 
@@ -272,7 +362,7 @@ async function generateAnswer(question, history, internalSources, useWeb, constr
     answer,
     usedWeb: useWeb,
     internalSources: [],
-    externalSources,
+    externalSources: [],
   };
 }
 
@@ -332,7 +422,7 @@ function normalizeGeminiModelName(model) {
   return normalizedModel;
 }
 
-function buildOpenAiBody(question, history, internalSources, useWeb, constraints) {
+function buildOpenAiBody(question, history, internalSources, useWeb, constraints, externalSources) {
   const body = {
     model: process.env.OPENAI_MODEL || DEFAULT_MODEL,
     input: [
@@ -342,20 +432,16 @@ function buildOpenAiBody(question, history, internalSources, useWeb, constraints
       },
       {
         role: "user",
-        content: buildUserPrompt(question, history, internalSources, useWeb, constraints),
+        content: buildUserPrompt(question, history, internalSources, useWeb, constraints, externalSources),
       },
     ],
     temperature: 0.2,
   };
 
-  if (useWeb) {
-    body.tools = [{ type: "web_search_preview" }];
-  }
-
   return body;
 }
 
-function buildGeminiBody(question, history, internalSources, useWeb, constraints) {
+function buildGeminiBody(question, history, internalSources, useWeb, constraints, externalSources) {
   const body = {
     systemInstruction: {
       parts: [{ text: buildSystemPrompt() }],
@@ -363,7 +449,7 @@ function buildGeminiBody(question, history, internalSources, useWeb, constraints
     contents: [
       {
         role: "user",
-        parts: [{ text: buildUserPrompt(question, history, internalSources, useWeb, constraints) }],
+        parts: [{ text: buildUserPrompt(question, history, internalSources, useWeb, constraints, externalSources) }],
       },
     ],
     generationConfig: {
@@ -371,10 +457,6 @@ function buildGeminiBody(question, history, internalSources, useWeb, constraints
       responseMimeType: "application/json",
     },
   };
-
-  if (useWeb) {
-    body.tools = [{ google_search: {} }];
-  }
 
   return body;
 }
@@ -443,13 +525,13 @@ function buildSystemPrompt() {
     "Rispondi utilizzando esclusivamente le fonti pertinenti ai vincoli espliciti della domanda.",
     "Se l'utente indica uno strumento o una tipologia, escludi tutte le risorse che non corrispondono a tali criteri.",
     "Non citare o sintetizzare contenuti fuori tema provenienti da strumenti o tipologie diverse.",
-    "Se usi fonti esterne, distingui chiaramente le informazioni esterne da quelle interne.",
+    "Se usi fonti esterne, usa solo quelle fornite nel campo fonti_esterne_disponibili e distingui chiaramente le informazioni esterne da quelle interne.",
     "Rispondi in italiano, con tono professionale e sintetico.",
     "Restituisci solo JSON valido con queste chiavi: answer, internal_sources, external_sources, used_web. Il campo answer deve contenere testo Markdown leggibile, non un JSON annidato.",
   ].join("\n");
 }
 
-function buildUserPrompt(question, history, internalSources, useWeb, constraints = {}) {
+function buildUserPrompt(question, history, internalSources, useWeb, constraints = {}, externalSources = []) {
   return JSON.stringify(
     {
       domanda_utente: question,
@@ -463,9 +545,10 @@ function buildUserPrompt(question, history, internalSources, useWeb, constraints
         content: String(item.content || "").slice(0, 1200),
       })),
       fonti_interne_disponibili: internalSources.map(sourceForPrompt),
+      fonti_esterne_disponibili: externalSources.map(externalSourceForPrompt),
       fallback_web_abilitato: useWeb,
       istruzioni:
-        "Rispondi usando solo le fonti_interne_disponibili coerenti con i vincoli espliciti. Cita solo fonti realmente usate. Per le fonti interne usa gli id forniti. Se non ci sono fonti interne pertinenti e il fallback web e abilitato, usa solo fonti ufficiali o autorevoli.",
+        "Rispondi usando solo le fonti_interne_disponibili e le fonti_esterne_disponibili coerenti con i vincoli espliciti. Cita solo fonti realmente usate. Per le fonti interne usa gli id forniti. Per le fonti esterne usa gli url forniti.",
     },
     null,
     2,
@@ -487,6 +570,16 @@ function sourceForPrompt(source) {
   };
 }
 
+function externalSourceForPrompt(source) {
+  return {
+    title: source.title,
+    source: source.source,
+    url: source.url,
+    snippet: String(source.content || "").slice(0, 1200),
+    relevance_score: source.score,
+  };
+}
+
 function normalizeInternalSources(modelSources, retrievedSources) {
   const byId = new Map(retrievedSources.map((source) => [source.id, source]));
   const selectedIds = new Set(
@@ -502,6 +595,24 @@ function normalizeInternalSources(modelSources, retrievedSources) {
     tipo: source.tipo,
     strumento: source.strumento,
     excerpt: excerpt(source.desc || source.technicalText || source.query),
+    score: source.score,
+  }));
+}
+
+function normalizeExternalSources(modelSources, retrievedSources) {
+  const byUrl = new Map(retrievedSources.map((source) => [source.url, source]));
+  const selectedUrls = new Set(
+    (Array.isArray(modelSources) ? modelSources : [])
+      .map((source) => String(source.url || source.uri || "").trim())
+      .filter(Boolean),
+  );
+  const sources = selectedUrls.size ? [...selectedUrls].map((url) => byUrl.get(url)).filter(Boolean) : retrievedSources.slice(0, 5);
+
+  return sources.map((source) => ({
+    title: source.title || source.url,
+    source: source.source || sourceHost(source.url),
+    url: source.url,
+    excerpt: excerpt(source.content),
     score: source.score,
   }));
 }
