@@ -1830,13 +1830,102 @@ function renderChatMessages(loading = false) {
 function chatMessageTemplate(message) {
   const roleLabel = message.role === "user" ? "Tu" : "Knowledge Hub AI";
   const sources = message.role === "assistant" ? renderChatSources(message) : "";
+  const content = message.role === "assistant" ? formatChatContent(message.content) : escHtml(message.content).replace(/\n/g, "<br>");
 
   return `
     <div class="chat-message ${message.role === "user" ? "user" : "assistant"}">
       <div class="chat-role">${roleLabel}</div>
-      <div class="chat-bubble">${escHtml(message.content).replace(/\n/g, "<br>")}</div>
+      <div class="chat-bubble">${content}</div>
       ${sources}
     </div>`;
+}
+
+function formatChatContent(content) {
+  const text = normalizeChatAnswer(content);
+  if (!text) return "Non ho trovato informazioni sufficienti per rispondere.";
+
+  const lines = text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  let listType = "";
+  const html = [];
+
+  const closeList = () => {
+    if (!listType) return;
+    html.push(`</${listType}>`);
+    listType = "";
+  };
+
+  lines.forEach((line) => {
+    const heading = line.match(/^(#{1,4})\s+(.+)$/);
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    const numbered = line.match(/^\d+\.\s+(.+)$/);
+
+    if (heading) {
+      closeList();
+      html.push(`<strong>${formatInlineMarkdown(heading[2])}</strong>`);
+      return;
+    }
+
+    if (bullet) {
+      if (listType !== "ul") {
+        closeList();
+        html.push("<ul>");
+        listType = "ul";
+      }
+      html.push(`<li>${formatInlineMarkdown(bullet[1])}</li>`);
+      return;
+    }
+
+    if (numbered) {
+      if (listType !== "ol") {
+        closeList();
+        html.push("<ol>");
+        listType = "ol";
+      }
+      html.push(`<li>${formatInlineMarkdown(numbered[1])}</li>`);
+      return;
+    }
+
+    closeList();
+    html.push(`<p>${formatInlineMarkdown(line)}</p>`);
+  });
+
+  closeList();
+  return html.join("");
+}
+
+function normalizeChatAnswer(content) {
+  const raw = String(content || "").trim();
+  const parsed = parseChatJson(raw);
+  const value = parsed && typeof parsed.answer === "string" ? parsed.answer : raw;
+  const nested = parseChatJson(value);
+  return String(nested?.answer || value)
+    .replace(/\\n/g, "\n")
+    .replace(/^```json\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+}
+
+function parseChatJson(value) {
+  const text = String(value || "").trim();
+  if (!text || !/^[{["`]/.test(text)) return null;
+  const clean = text.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+
+  try {
+    const parsed = JSON.parse(clean);
+    return typeof parsed === "string" ? parseChatJson(parsed) || { answer: parsed } : parsed;
+  } catch (error) {
+    const match = clean.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch (innerError) {
+      return null;
+    }
+  }
+}
+
+function formatInlineMarkdown(value) {
+  return escHtml(value).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 }
 
 function renderChatSources(message) {
