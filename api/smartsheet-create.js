@@ -10,6 +10,7 @@ const {
 function sanitizePayload(body = {}) {
   const payload = {};
   [
+    "nomeCognome",
     "title",
     "tipo",
     "strumento",
@@ -55,7 +56,8 @@ function splitValues(value) {
 
 function validatePayload(payload) {
   const missing = [];
-  if (!payload.title) missing.push("Titolo Iniziativa");
+  if (!payload.nomeCognome) missing.push("Nome e Cognome");
+  if (!payload.title) missing.push("Titolo Informazione");
   if (!payload.tipo) missing.push("Tipologia di contenuto");
   if (payload.tipo === "Issue - Workaround" && !payload.workaround) missing.push("Hai trovato un workaround?");
   if (!payload.strumenti.length) missing.push("Strumento");
@@ -65,18 +67,18 @@ function validatePayload(payload) {
 }
 
 function requireTitleColumn(columns) {
-  if (columns.has("Titolo Iniziativa")) {
-    return { columnName: "Titolo Iniziativa", warning: "" };
+  if (columns.has("Titolo Informazione")) {
+    return { columnName: "Titolo Informazione", warning: "" };
   }
 
-  if (columns.has("Titolo Informazione")) {
+  if (columns.has("Titolo Iniziativa")) {
     return {
-      columnName: "Titolo Informazione",
-      warning: "La colonna 'Titolo Iniziativa' non esiste: il valore e stato scritto in 'Titolo Informazione'.",
+      columnName: "Titolo Iniziativa",
+      warning: "La colonna 'Titolo Informazione' non esiste: il valore e stato scritto nella colonna storica 'Titolo Iniziativa'.",
     };
   }
 
-  const error = new Error("Nel foglio non esiste la colonna 'Titolo Iniziativa' ne la colonna fallback 'Titolo Informazione'.");
+  const error = new Error("Nel foglio non esiste la colonna 'Titolo Informazione' ne la colonna fallback 'Titolo Iniziativa'.");
   error.statusCode = 409;
   throw error;
 }
@@ -98,6 +100,7 @@ module.exports = async function handler(req, res) {
     const { columnName: titleColumnName, warning } = requireTitleColumn(columns);
     const cells = [];
 
+    addCell(cells, columns, "Nome e Cognome", payload.nomeCognome);
     addCell(cells, columns, titleColumnName, payload.title);
     addCell(cells, columns, "Tipologia di contenuto", payload.tipo);
     addCell(cells, columns, "Strumento", payload.strumenti.join(", "));

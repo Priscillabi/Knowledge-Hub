@@ -82,6 +82,8 @@ const CENSIMENTO_INFO_TYPES = [
   { value: "Procedure Operative Standard (SOP)", description: "" },
 ];
 
+const CANONICAL_TIPOLOGIE = CENSIMENTO_INFO_TYPES.map((item) => item.value);
+
 const CENSIMENTO_TOOLS = [
   "Word",
   "Power Point",
@@ -93,6 +95,8 @@ const CENSIMENTO_TOOLS = [
   "Power Automate",
   "Synthesia",
 ];
+
+const CANONICAL_STRUMENTI = [...CENSIMENTO_TOOLS];
 
 const TOOL_VALUE_ALIASES = {
   "Power BI (linguaggio: DAX)": "Power BI",
@@ -438,12 +442,31 @@ async function loadKnowledgeHub() {
 
 function uniqueVals(key) {
   const values = new Set();
-  db.forEach((item) => splitValues(item[key]).forEach((value) => values.add(value)));
+  db.forEach((item) => splitValues(item[key]).forEach((value) => values.add(canonicalFieldValue(key, value))));
   return [...values].sort();
 }
 
 function itemHasSplitValue(item, key, value) {
-  return splitValues(item[key]).includes(value);
+  const expected = canonicalFieldValue(key, value);
+  return splitValues(item[key]).some((itemValue) => canonicalFieldValue(key, itemValue) === expected);
+}
+
+function canonicalFieldValue(key, value) {
+  if (key !== "strumento") return value;
+  return canonicalToolValue(value);
+}
+
+function canonicalToolValue(value) {
+  const rawValue = String(value || "").trim();
+  const normalizedRaw = normalizeSearchText(rawValue);
+  const rawGeneralTool = normalizeSearchText(generalToolName(rawValue));
+  const canonical = CANONICAL_STRUMENTI.find((tool) => {
+    const normalizedTool = normalizeSearchText(tool);
+    const generalTool = normalizeSearchText(generalToolName(tool));
+    return normalizedTool === normalizedRaw || generalTool === rawGeneralTool;
+  });
+
+  return canonical || rawValue;
 }
 
 function itemFacetValues(item, sectionName, columns = []) {
@@ -467,7 +490,7 @@ function itemMatchesFacetSelection(item, sectionName, values) {
 }
 
 function buildFilters() {
-  const tipos = uniqueVals("tipo");
+  const tipos = valuesWithCanonical("tipo", CANONICAL_TIPOLOGIE);
   elements.tipoFilters.innerHTML = [
     filterButton("tipo", "all", "Tutte", "#A09A91", db.length, activeTipo === "all"),
     ...tipos.map((tipo) =>
@@ -475,7 +498,7 @@ function buildFilters() {
     ),
   ].join("");
 
-  const tools = uniqueVals("strumento");
+  const tools = valuesWithCanonical("strumento", CANONICAL_STRUMENTI);
   elements.toolFilters.innerHTML = [
     filterButton("tool", "all", "Tutti", "#A09A91", db.length, activeTools.length === 0),
     ...tools.map((tool) =>
@@ -513,6 +536,12 @@ function buildFilters() {
       render();
     });
   });
+}
+
+function valuesWithCanonical(field, canonicalValues) {
+  const values = new Set(canonicalValues);
+  uniqueVals(field).forEach((value) => values.add(value));
+  return [...values];
 }
 
 function buildFacetSections() {
@@ -719,7 +748,7 @@ function updateStats() {
   const toolStats = toolDistribution();
   const heatmap = toolTipoHeatmap(toolStats, tipoStats);
   const maxTipoCount = Math.max(...tipoStats.map((item) => item.count), 1);
-  const maxToolCount = Math.max(...toolStats.map((item) => item.count), 1);
+  const activeToolCount = toolStats.filter((item) => item.count > 0).length;
 
   elements.statsBar.innerHTML = `
     <div class="overview-head">
@@ -737,7 +766,7 @@ function updateStats() {
         </div>
         <div>
           <span class="stat-label">Totale strumenti</span>
-          <strong>${toolStats.length}</strong>
+          <strong>${activeToolCount}</strong>
         </div>
       </div>
     </section>
@@ -747,14 +776,6 @@ function updateStats() {
       </div>
       <div class="stat-chart-bars">
         ${tipoStats.map((item) => chartBarTemplate(item, maxTipoCount)).join("")}
-      </div>
-    </section>
-    <section class="stats-chart stats-tool-chart" aria-label="Informazioni per strumento">
-      <div class="stat-chart-head">
-        <span class="stat-label">Informazioni per strumento</span>
-      </div>
-      <div class="stat-chart-bars tool-chart-bars">
-        ${toolStats.map((item) => chartBarTemplate(item, maxToolCount)).join("")}
       </div>
     </section>
     <section class="stats-heatmap" aria-label="Distribuzione per strumento e tipologia">
@@ -782,7 +803,7 @@ function chartBarTemplate(item, maxCount) {
 }
 
 function tipoDistribution() {
-  return uniqueVals("tipo").map((tipo) => ({
+  return valuesWithCanonical("tipo", CANONICAL_TIPOLOGIE).map((tipo) => ({
     label: tipo,
     count: db.filter((item) => itemHasSplitValue(item, "tipo", tipo)).length,
     color: tipoColor(tipo),
@@ -791,16 +812,25 @@ function tipoDistribution() {
 
 function toolDistribution() {
   const counts = new Map();
+  CANONICAL_STRUMENTI.forEach((tool) => counts.set(tool, 0));
 
   db.forEach((item) => {
     splitValues(item.strumento).forEach((tool) => {
-      counts.set(tool, (counts.get(tool) || 0) + 1);
+      const canonicalTool = canonicalToolValue(tool);
+      counts.set(canonicalTool, (counts.get(canonicalTool) || 0) + 1);
     });
   });
 
   return [...counts.entries()]
     .map(([label, count]) => ({ label, count, color: toolColor(label) }))
-    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+    .sort((a, b) => {
+      const aIndex = CANONICAL_STRUMENTI.indexOf(a.label);
+      const bIndex = CANONICAL_STRUMENTI.indexOf(b.label);
+      if (aIndex >= 0 && bIndex >= 0) return aIndex - bIndex;
+      if (aIndex >= 0) return -1;
+      if (bIndex >= 0) return 1;
+      return b.count - a.count || a.label.localeCompare(b.label);
+    });
 }
 
 function toolTipoHeatmap(toolStats, tipoStats) {
@@ -1244,7 +1274,7 @@ function openEntryModal() {
   renderEntryForm();
   elements.entryModal.classList.add("show");
   elements.entryModal.setAttribute("aria-hidden", "false");
-  elements.entryForm.querySelector("[name='title']").focus();
+  elements.entryForm.querySelector("[name='nomeCognome']").focus();
 }
 
 function closeEntryModal() {
@@ -1268,6 +1298,7 @@ function resetEntryState() {
 }
 
 function renderEntryForm(preserveValues = {}) {
+  const nomeCognome = preserveValues.nomeCognome || "";
   const title = preserveValues.title || "";
   const desc = preserveValues.desc || "";
   const query = preserveValues.query || "";
@@ -1286,8 +1317,15 @@ function renderEntryForm(preserveValues = {}) {
         </p>
       </div>
       <label class="field span-2">
-        <span>Titolo Iniziativa ${requiredMark()}</span>
-        <input type="text" name="title" autocomplete="off" required value="${escAttr(title)}" placeholder="Inserire un titolo sintetico dell'iniziativa o dell'informazione" />
+        <span>Nome e Cognome ${requiredMark()}</span>
+        <div class="field-help">
+          <p>Inserire nome e cognome della persona che sta effettuando l'inserimento.</p>
+        </div>
+        <input type="text" name="nomeCognome" autocomplete="name" required value="${escAttr(nomeCognome)}" />
+      </label>
+      <label class="field span-2">
+        <span>Titolo Informazione ${requiredMark()}</span>
+        <input type="text" name="title" autocomplete="off" required value="${escAttr(title)}" placeholder="Inserire un titolo sintetico dell'informazione" />
       </label>
       ${renderInfoTypeField()}
       ${entryState.infoType === "Issue - Workaround" ? renderWorkaroundField() : ""}
@@ -1543,6 +1581,7 @@ function restoreEntryScrollPositions() {
 
 function preserveEntryValues() {
   return {
+    nomeCognome: elements.entryForm.querySelector("[name='nomeCognome']")?.value || "",
     title: elements.entryForm.querySelector("[name='title']")?.value || "",
     desc: elements.entryForm.querySelector("[name='desc']")?.value || "",
     query: elements.entryForm.querySelector("[name='query']")?.value || "",
@@ -1628,11 +1667,13 @@ function hasCodeTrigger() {
 
 function entryPayloadFromForm() {
   const preserved = preserveEntryValues();
+  const nomeCognome = preserved.nomeCognome.trim();
   const desc = elements.entryForm.querySelector("[name='desc']")?.value.trim() || "";
   const query = elements.entryForm.querySelector("[name='query']")?.value.trim() || "";
   const normalizedTools = entryState.tools.map(normalizedToolName);
 
   return {
+    nomeCognome,
     title: preserved.title.trim(),
     tipo: entryState.infoType,
     workaround: entryState.workaround,
@@ -1656,7 +1697,8 @@ function buildEntryTags(tools) {
 
 function validateEntryPayload(payload) {
   const missing = [];
-  if (!payload.title) missing.push("Titolo Iniziativa");
+  if (!payload.nomeCognome) missing.push("Nome e Cognome");
+  if (!payload.title) missing.push("Titolo Informazione");
   if (!payload.tipo) missing.push("Che tipo di informazione stai inserendo?");
   if (payload.tipo === "Issue - Workaround" && !payload.workaround) missing.push("Hai trovato un workaround?");
   if (!payload.strumenti.length) missing.push("Strumento");
@@ -1822,7 +1864,7 @@ function renderChatMessages(loading = false) {
 
   const intro = chatHistory.length
     ? ""
-    : `<div class="chat-empty">Fai una domanda: usero prima la Knowledge Base aziendale e, se configurato, integrero con fonti esterne autorevoli.</div>`;
+    : `<div class="chat-empty">Fai una domanda: userò prima la Knowledge Base aziendale e, se necessario, integrerò la mia risposta con fonti esterne sicure.</div>`;
 
   elements.chatMessages.innerHTML = `
     ${intro}

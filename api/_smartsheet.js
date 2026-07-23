@@ -126,7 +126,7 @@ function normalizeRow(row, columnsById) {
     query: cellDisplayValue(row, columnsById, "Inserire Formula o Query"),
     tipo: cellDisplayValue(row, columnsById, "Tipologia di contenuto"),
     strumento: cellDisplayValue(row, columnsById, "Strumento"),
-    autore: cellDisplayValue(row, columnsById, "Inserita da"),
+    autore: cellDisplayValue(row, columnsById, "Nome e Cognome") || cellDisplayValue(row, columnsById, "Inserita da"),
     tagRicerca: cellDisplayValue(row, columnsById, "TAG - Ricerca"),
     workaround: cellDisplayValue(row, columnsById, "Workaround"),
     technical,

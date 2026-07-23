@@ -679,7 +679,7 @@ textarea {
 
 .overview-grid {
   display: grid;
-  grid-template-columns: minmax(170px, 0.8fr) minmax(280px, 1.35fr) minmax(260px, 1.15fr);
+  grid-template-columns: minmax(170px, 0.8fr) minmax(280px, 1.35fr);
   gap: 12px;
 }
 
@@ -746,12 +746,6 @@ textarea {
   gap: 9px;
   min-height: 84px;
   padding: 13px 15px;
-}
-
-.stats-tool-chart .stat-chart-bars {
-  max-height: 166px;
-  overflow-y: auto;
-  padding-right: 2px;
 }
 
 .stat-chart-head {
@@ -2092,7 +2086,6 @@ textarea {
     order: initial;
   }
 
-  .stats-tool-chart,
   .stats-heatmap {
     grid-column: 1 / -1;
   }
@@ -2194,7 +2187,6 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .stats-tool-chart,
   .stats-heatmap {
     grid-column: auto;
   }
