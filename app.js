@@ -4,6 +4,7 @@ let activeTools = [];
 let activeFacets = {};
 let searchTerm = "";
 let technicalFiltersUnlocked = false;
+let overviewCollapsed = false;
 
 const TOOL_COLORS = {
   Smartsheet: "#0F6E56",
@@ -756,15 +757,16 @@ function updateStats() {
         <h2>Panoramica della Knowledge Base</h2>
         <p>Riepilogo aggiornato delle informazioni presenti nel database.</p>
       </div>
+      <button class="overview-toggle" id="overviewToggle" type="button">${overviewCollapsed ? "Mostra riepilogo" : "Nascondi riepilogo"}</button>
     </div>
-    <div class="overview-grid">
+    <div class="overview-grid ${overviewCollapsed ? "hidden" : ""}">
     <section class="stats-summary" aria-label="Riepilogo generale">
       <div class="stat-summary-items">
-        <div>
-        <span class="stat-label">Totale informazioni inserite</span>
-        <strong>${db.length}</strong>
+        <div class="stat-summary-item">
+          <span class="stat-label">Totale informazioni inserite</span>
+          <strong>${db.length}</strong>
         </div>
-        <div>
+        <div class="stat-summary-item">
           <span class="stat-label">Totale strumenti</span>
           <strong>${activeToolCount}</strong>
         </div>
@@ -785,6 +787,11 @@ function updateStats() {
       ${heatmapTemplate(heatmap)}
     </section>
     </div>`;
+
+  elements.statsBar.querySelector("#overviewToggle")?.addEventListener("click", () => {
+    overviewCollapsed = !overviewCollapsed;
+    updateStats();
+  });
 }
 
 function chartBarTemplate(item, maxCount) {

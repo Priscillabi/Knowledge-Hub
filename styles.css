@@ -585,8 +585,11 @@ textarea {
 }
 
 .intro-steps strong {
+  flex: 0 0 25px;
   width: 25px;
+  min-width: 25px;
   height: 25px;
+  min-height: 25px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -677,10 +680,30 @@ textarea {
   font-size: 13px;
 }
 
+.overview-toggle {
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  padding: 8px 11px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.overview-toggle:hover {
+  border-color: var(--coral);
+  color: var(--coral-dark);
+}
+
 .overview-grid {
   display: grid;
   grid-template-columns: minmax(170px, 0.8fr) minmax(280px, 1.35fr);
   gap: 12px;
+}
+
+.overview-grid.hidden {
+  display: none;
 }
 
 .stats-summary,
@@ -706,19 +729,21 @@ textarea {
 
 .stat-summary-items {
   display: grid;
-  gap: 7px;
+  grid-template-rows: 1fr 1fr;
+  height: 100%;
 }
 
-.stat-summary-items div {
+.stat-summary-item {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 7px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 0;
   border-top: 1px solid var(--line);
 }
 
-.stat-summary-items div:first-child {
+.stat-summary-item:first-child {
   padding-top: 0;
   border-top: 0;
 }
@@ -734,7 +759,7 @@ textarea {
 
 .stats-summary strong {
   color: var(--navy);
-  font-size: 24px;
+  font-size: 34px;
   font-weight: 800;
   line-height: 1;
 }
