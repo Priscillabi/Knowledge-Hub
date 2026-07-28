@@ -15,6 +15,18 @@ const TOOL_COLORS = {
   "Power Automate": "#F13557",
 };
 
+const SIDEBAR_TOOL_COLORS = {
+  Word: "#38BDF8",
+  "Power Point": "#F97316",
+  Excel: "#84CC16",
+  Smartsheet: "#14B8A6",
+  "Power BI (linguaggio: DAX)": "#60A5FA",
+  "Power Query (linguaggio: M)": "#C084FC",
+  "Virtus Flow": "#FACC15",
+  "Power Automate": "#F472B6",
+  Synthesia: "#2DD4BF",
+};
+
 const TIPO_COLORS = {
   "Best Practice": "#0F6E56",
   "Issue - Workaround": "#F13557",
@@ -317,6 +329,13 @@ function toolColor(tool) {
   return "#6B665E";
 }
 
+function sidebarToolColor(tool) {
+  for (const key in SIDEBAR_TOOL_COLORS) {
+    if (tool && tool.includes(key)) return SIDEBAR_TOOL_COLORS[key];
+  }
+  return "#D1D5DB";
+}
+
 function tipoColor(tipo) {
   for (const key in TIPO_COLORS) {
     if (tipo && tipo.includes(key)) return TIPO_COLORS[key];
@@ -504,7 +523,7 @@ function buildFilters() {
   elements.toolFilters.innerHTML = [
     filterButton("tool", "all", "Tutti", "#A09A91", db.length, activeTools.length === 0),
     ...tools.map((tool) =>
-      filterButton("tool", tool, tool, toolColor(tool), db.filter((item) => itemHasSplitValue(item, "strumento", tool)).length, activeTools.includes(tool)),
+      filterButton("tool", tool, tool, sidebarToolColor(tool), db.filter((item) => itemHasSplitValue(item, "strumento", tool)).length, activeTools.includes(tool)),
     ),
   ].join("");
 
