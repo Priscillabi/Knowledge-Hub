@@ -18,7 +18,8 @@ const TOOL_COLORS = {
 const TIPO_COLORS = {
   "Best Practice": "#0F6E56",
   "Issue - Workaround": "#F13557",
-  Template: "#2A327C",
+  "Elemento tecnico": "#8B5CF6",
+  Template: "#F59E0B",
 };
 
 const FACET_CONFIG = [
