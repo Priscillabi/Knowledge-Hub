@@ -293,6 +293,7 @@ const elements = {
   tipoFilters: document.querySelector("#tipo-filters"),
   toolFilters: document.querySelector("#tool-filters"),
   facetFilters: document.querySelector("#facet-filters"),
+  sidebarToggle: document.querySelector("#sidebarToggle"),
   sidebarFooter: document.querySelector("#sidebarFooter"),
   statsBar: document.querySelector("#statsBar"),
   mainArea: document.querySelector("#mainArea"),
@@ -2203,6 +2204,16 @@ function escAttr(value) {
   return escHtml(value).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+function setSidebarCollapsed(collapsed) {
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  if (!elements.sidebarToggle) return;
+
+  const label = collapsed ? "Apri lista dei filtri" : "Chiudi lista dei filtri";
+  elements.sidebarToggle.setAttribute("aria-label", label);
+  elements.sidebarToggle.setAttribute("title", label);
+  elements.sidebarToggle.textContent = collapsed ? ">" : "<";
+}
+
 elements.searchInput.addEventListener("input", () => onSearch(elements.searchInput.value));
 elements.searchClear.addEventListener("click", clearSearch);
 elements.reloadButton.addEventListener("click", loadKnowledgeHub);
@@ -2215,6 +2226,7 @@ elements.chatLauncher?.addEventListener("click", openChatPanel);
 elements.chatClose?.addEventListener("click", closeChatPanel);
 elements.chatClear?.addEventListener("click", resetChat);
 elements.chatForm?.addEventListener("submit", submitChatQuestion);
+elements.sidebarToggle?.addEventListener("click", () => setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed")));
 elements.entryModal.addEventListener("click", (event) => {
   if (event.target === elements.entryModal) closeEntryModal();
 });
