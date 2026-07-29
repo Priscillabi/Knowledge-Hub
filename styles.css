@@ -748,7 +748,7 @@ body.sidebar-collapsed .main {
 
 .overview-grid {
   display: grid;
-  grid-template-columns: minmax(170px, 0.8fr) minmax(280px, 1.35fr);
+  grid-template-columns: minmax(150px, 0.55fr) minmax(340px, 1.6fr);
   gap: 12px;
 }
 
@@ -2153,7 +2153,7 @@ body.sidebar-collapsed .main {
   }
 
   .overview-grid {
-    grid-template-columns: repeat(2, minmax(160px, 1fr));
+    grid-template-columns: minmax(150px, 0.65fr) minmax(280px, 1.35fr);
   }
 
   .stats-chart {
